@@ -92,8 +92,8 @@ configuration.
 ### 2. Data Models and Storage
 
 Define the following models in models.py using the Pydantic validation library:
-● User - id, name, password_hash, role, department
-● MealParticipation - id, user_id, date, meal_type, is_participating
+● User - id, name, email, password_hash, role, department, is_active, created_at
+● MealParticipation - id, user_id, date, meal_type, is_participating, updated_at
 ● MealType(enum) - Lunch, Snacks, Iftar, EventDinner, OptionalDinner
 ● UserRole(enum) - Employee, TeamLead, Admin
 Implement file-based JSON storage utilities in storage.py. Use {load_json(filename)} to
@@ -113,25 +113,62 @@ dependencies:
 ### 4. Backend API Development
 
 Create routers in routers/ directory:
+```
 ● auth.py - Authentication endpoints
 ● meals.py - Meal participation endpoints
 ● users.py - User management endpoints
+```
 Core endpoints:
+```
 ● POST /api/auth/login - User authentication (returns JWT)
+● POST /api/users/register - Self-registration
 ● GET /api/meals/today - Fetch today's meal types and user's participation status
 ● PUT /api/meals/participation - Employee opts in/out of meals
 ● POST /api/meals/participation/admin - Team Lead/Admin updates on
 behalf of employee
+● GET /api/users/{user_id} - View user details (Team Lead endpoint)
+```
 
+Admin Endpoints:
+```
+● POST /api/users/create - Create user with role
+● GET /api/users - List all users
+● PUT /api/users/{user_id} - Update user
+● DELETE /api/users/{users_id) - Deactiveate user
+```
 
+```
 ● GET /api/meals/headcount/today - Get meal headcount totals
 (Admin/Logistics only)
 ● GET /api/users/me - Current user profile
+```
 FastAPI features to be used:
+```
 ● Automatic OpenAPI docs at /docs
 ● Request/response validation with Pydantic
 ● Dependency injection for auth
 ● CORS middleware configuration
+```
+
+## Implementation Priority
+
+### Phase 1 (Core MVP)
+1. ✅ POST /api/auth/login
+2. ✅ POST /api/users/register
+3. ✅ GET /api/users/me
+4. ✅ GET /api/meals/today
+5. ✅ PUT /api/meals/participation
+6. ✅ GET /api/meals/headcount/today
+
+### Phase 2 (Admin Features)
+7. POST /api/users/create
+8. POST /api/meals/participation/admin
+9. GET /api/users
+10. GET /api/users/{user_id}
+
+### Phase 3 (Management)
+11. PUT /api/users/{user_id}
+12. DELETE /api/users/{user_id}
 
 ### 5. Frontend Development
 
@@ -217,5 +254,6 @@ npm run dev
 ↳ All three user roles work correctly
 ↳ Data persists across app restarts
 ```
+
 
 
