@@ -62,6 +62,7 @@ to future iterations.
 Initialize project repository with chosen tech stack; repository name:
 **Tasks-Repo_CEA-2026-Niloy/Task1_mhp-app**. Proceed with setting up the following
 folder structure:
+```
 mhp-app/
 ├── backend/
 │ ├── app/
@@ -82,6 +83,7 @@ mhp-app/
 │ ├── package.json
 │ └── .env
 └── README.md
+```
 
 
 Configure development environment and dependencies and create the .env template for
@@ -215,4 +217,5 @@ npm run dev
 ↳ All three user roles work correctly
 ↳ Data persists across app restarts
 ```
+
 
