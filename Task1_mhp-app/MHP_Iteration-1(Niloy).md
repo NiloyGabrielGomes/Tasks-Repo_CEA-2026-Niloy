@@ -5,23 +5,34 @@
 ```
 Niloy Gabriel Gomes
 Feb 6, 2026
+Status: Draft - Pending Review
 ```
 
-- Overview
+- [Overview](#overview)
    - Tech Stack
    - Summary
-- Development Steps
+   - Problem Statement
+- [Goals and Non-Goals](#goals-and-non-goals)
+   - Goals (Iteration 1)
+   - Non-Goals
+- [Requirements](#requirements)
+   - Functional Requirements
+   - Non-Functional Requirements
+   - Constraints
+- [Development Steps](#development-steps)
    - 1. Project Setup
    - 2. Data Models and Storage
-   - 3. Authentication and Authorization
-   - 4. Backend API Development
-   - 5. Frontend Development
-   - 6. Other Logic Implementation
-   - 7. Documentation, Testing and Validation
-   - 8. Local Deployment
-- Key Design Decisions for Iteration
-- Success Criteria
+   - 3. User Flows
+   - 4. Authentication and Authorization
+   - 5. Backend API Development
+   - 6. Frontend Development
+   - 7. Other Logic Implementation
+   - 8. Documentation, Testing and Validation
+   - 9. Local Deployment/Operations
+- [Risks, Assumptions, and Open Questions](#risks-assumptions-and-open-questions)
+- [Key Design Decisions for Iteration](#key-design-decisions-for-iteration)
 
+---
 
 ## Overview
 
@@ -54,8 +65,198 @@ implementation details for each layer of the stack. Additionally, it includes ke
 decisions, success criteria, and clearly defines what features are in-scope versus deferred
 to future iterations.
 ```
+### Problem Statement
+The organization currently uses a manual Excel-based process to track daily meal participation for 100+ employees. This approach presents several critical challenges, like operational ineffeciencies, data quality issues, and potential negative business impacts due to inaccurate head counts. The proposed solution targets to alleviate these challenges by increasing efficiency and accuracy.
+
+---
+
+## Goals and Non-Goals
+
+### Goals (Iteration 1)
+
+**Primary Goals:**
+
+1. **Enable Self-Service Meal Management**
+2. **Provide Real-Time Headcount Visibility**
+3. **Implement Role-Based Access Control**
+4. **Replace Excel with Reliable System**
+5. **Default Opt-In Approach**
+
+**Secondary Goals:**
+
+6. **Build Foundation for Future Iterations**
+   - Design architecture to support database migration
+   - Create extensible data models
+   - Implement authentication framework for future features
+
+7. **Provide Audit Trail**
+   - Track who made changes to participation records
+   - Record timestamps for all updates
+   - Enable troubleshooting and accountability
+
+### Non-Goals
+
+**Features Deferred to Future Iterations:**
+
+1. **Advanced Planning Features**
+   - Multi-day meal planning (only "today" in Iteration 1)
+   - Weekly/monthly calendar view
+   - Advance meal scheduling
+   - Recurring participation patterns
+
+2. **Cutoff Time Enforcement**
+3. **Special Day Handling**
+4. **Notifications and Reminders**
+5. **Analytics and Reporting**
+6. **Advanced User Management**  
+
+---
+
+## Requirements
+
+### Functional Requirements
+
+#### FR-1: User Authentication
+- **FR-1.1:** Users must be able to log in with email and password
+- **FR-1.2:** System must issue JWT tokens upon successful authentication
+- **FR-1.3:** Users must be able to register themselves as "Employee" role
+
+#### FR-2: User Authorization
+- **FR-2.1:** System must enforce role-based access control (Employee, Team Lead, Admin)
+- **FR-2.2:** Employees can only view and modify their own participation
+- **FR-2.3:** Admins can view and modify any user's participation, Team Leads can view and modify their team members' participation
+
+#### FR-3: Meal Participation Management
+- **FR-3.1:** Employees must default to "opted-in" for all meals
+- **FR-3.2:** Employees must be able to opt-out of specific meals
+- **FR-3.3:** Employees must be able to opt back in after opting out
+
+#### FR-4: Admin Participation Override
+- **FR-4.1:** Team Leads and Admins can update participation on behalf of users
+- **FR-4.2:** System must record who made the administrative update
+- **FR-4.3:** Updates must include timestamp for audit purposes
+
+#### FR-5: Headcount Reporting
+- **FR-5.1:** System must calculate real-time headcount for each meal type
+- **FR-5.2:** Headcount must update immediately when participation changes
+- **FR-5.3:** System must show total employee count alongside meal counts
+
+#### FR-6: User Management
+- **FR-6.1:** Admins can create new users with any rolem view list of all users, deactive users (soft delete), update user information (name, role, department)
+- **FR-6.2:** Users can view their own profile information
+
+### Non-Functional Requirements
+
+#### NFR-1: Performance
+#### NFR-2: Usability
+#### NFR-3: Reliability
+#### NFR-4: Security
+- **NFR-4.1:** Passwords must be hashed using bcrypt (never stored in plain text)
+- **NFR-4.2:** JWT tokens must be signed and verified
+- **NFR-4.3:** API endpoints must validate all input data
+- **NFR-4.4:** Sensitive data (passwords) must never appear in API responses
+- **NFR-4.5:** CORS must be configured to allow only frontend origin
+
+#### NFR-5: Maintainability
+#### NFR-6: Scalability (Future-Proofing)
+
+### Constraints
+
+#### Technical Constraints
+- **TC-1:** Must work on standard browsers (Chrome, Firefox, Edge - latest 2 versions)
+
+#### Business Constraints
+- **BC-1:** Development timeline: Feb 10th, 2026 for Iteration 1
+- **BC-2:** Single developer resource
+
+#### User Constraints
+- **UC-1:** All employees must have computer/device access
+- **UC-2:** Users must have company email addresses
+
+---
 
 ## Development Steps
+
+### System Architecture
+
+```
+
+                        CLIENT LAYER                          
+                                                              
+  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   
+  │ Browser  │  │ Browser  │  │ Browser  │  │ Browser  │   
+  │(Employee)│  │(Team Lead│  │ (Admin)  │  │ (Mobile) │   
+  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘   
+       │             │             │             │           
+       └─────────────┴─────────────┴─────────────┘           
+                           │                                   
+                       HTTPS/REST                               
+                           │
+                           │
+                           │
+                   APPLICATION LAYER                          
+          ┌───────────────▼────────────────┐                 
+          │   React Frontend (SPA)         │                
+          │      Port: 5173 (dev)          │               
+          │                                │              
+          │                                │                 
+          │  Services:                     │                 
+          │  └─ api.js (Axios)             │                 
+          │                                │                 
+          │  State:                        │                 
+          │  └─ AuthContext (JWT token)    │                 
+          └───────────────┬────────────────┘                 
+                          │                                   
+                     HTTP (Axios)                             
+                          │
+                      API LAYER                               
+          ┌───────────────▼────────────────┐                 
+          │   FastAPI Backend              │                 
+          │      Port: 8000                │                 
+          │                                │                 
+          │  ┌──────────────────────────┐  │                 
+          │  │   CORS Middleware        │  │                 
+          │  └──────────────────────────┘  │                 
+          │  ┌──────────────────────────┐  │                 
+          │  │   Auth Middleware (JWT)  │  │                 
+          │  └──────────────────────────┘  │                 
+          │  ┌──────────────────────────┐  │                 
+          │  │   Routers:               │  │                 
+          │  │   ├─ auth.py             │  │                 
+          │  │   ├─ meals.py            │  │                 
+          │  │   └─ users.py            │  │                 
+          │  └──────────────────────────┘  │                 
+          │  ┌──────────────────────────┐  │                 
+          │  │   Business Logic:        │  │                 
+          │  │   ├─ auth.py             │  │                 
+          │  │   ├─ models.py           │  │                 
+          │  │   └─ schemas.py          │  │                 
+          │  └──────────────────────────┘  │                 
+          └────────────────┬───────────────┘                 
+                           │
+                      DATA LAYER                               
+          ┌───────────────▼────────────────┐                 
+          │   Storage Module               │                 
+          │      (storage.py)              │                 
+          │                                │                 
+          │  Functions:                    │                 
+          │  ├─ load_json()                │                 
+          │  ├─ save_json()                │                 
+          │  ├─ get_user_by_email()        │                 
+          │  ├─ update_participation()     │                 
+          │  └─ get_headcount_by_date()    │                 
+          └───────────────┬────────────────┘                 
+                          │                                   
+                    JSON File I/O                             
+                          │                                   
+          ┌───────────────▼────────────────┐                 
+          │   File System                  │                
+          │                                │                 
+          │  /backend/data/                │                 
+          │  ├─ users.json                 │                 
+          │  └─ meal_participation.json    │                 
+          └────────────────────────────────┘                 
+```
 
 ### 1. Project Setup
 
@@ -100,7 +301,305 @@ Implement file-based JSON storage utilities in storage.py. Use {load_json(filena
 read data, {save_json(filename, data)} to write data, and {get_by_id();
 create(); update(); delete()} as helpers. Create seed data for testing purposes.
 
-### 3. Authentication and Authorization
+### 3. User Flows
+
+Flow 1: Employee Daily Check-in and Opt-out
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Employee Daily Workflow                   │
+└─────────────────────────────────────────────────────────────┘
+
+1. Employee arrives at work
+   │
+   ├─> Opens web browser
+   │
+   ├─> Navigates to MHP application (http://mhp.company.local)
+   │
+   └─> LOGIN PAGE
+       │
+       ├─> Enters email: john.doe@company.com
+       ├─> Enters password: ********
+       └─> Clicks "Login"
+           │
+           ├─> [System validates credentials]
+           ├─> [System issues JWT token]
+           └─> [Redirect to Employee Dashboard]
+               │
+               └─> EMPLOYEE DASHBOARD
+                   │
+                   ├─> Views today's date: "Thursday, February 6, 2026"
+                   │
+                   ├─> Sees meal participation status:
+                   │   ┌─────────────────────────────────┐
+                   │   │ ✓ Lunch         [Opted In ]    │
+                   │   │ ✓ Snacks        [Opted In ]    │
+                   │   │ ✓ Iftar         [Opted In ]    │
+                   │   │ ✓ Event Dinner  [Opted In ]    │
+                   │   │ ✓ Optional Dinner [Opted In ]  │
+                   │   └─────────────────────────────────┘
+                   │
+                   ├─> Decision Point: Need to opt-out?
+                   │   │
+                   │   ├─> YES: Won't attend lunch today
+                   │   │   │
+                   │   │   ├─> Clicks toggle next to "Lunch"
+                   │   │   │
+                   │   │   ├─> [API Call: PUT /api/meals/participation]
+                   │   │   │
+                   │   │   ├─> [System updates participation record]
+                   │   │   │   - Sets is_participating = false
+                   │   │   │   - Records updated_by = john.doe@company.com
+                   │   │   │   - Records timestamp
+                   │   │   │
+                   │   │   ├─> [Response: 200 OK]
+                   │   │   │
+                   │   │   └─> UI Updates:
+                   │   │       ┌─────────────────────────────────┐
+                   │   │       │ ✗ Lunch         [Opted Out]    │  ← Changed
+                   │   │       │ ✓ Snacks        [Opted In ]    │
+                   │   │       │ ✓ Iftar         [Opted In ]    │
+                   │   │       │ ✓ Event Dinner  [Opted In ]    │
+                   │   │       │ ✓ Optional Dinner [Opted In ]  │
+                   │   │       └─────────────────────────────────┘
+                   │   │       │
+                   │   │       └─> Shows success message: "Lunch participation updated"
+                   │   │
+                   │   └─> NO: All meals correct
+                   │       │
+                   │       └─> Closes browser
+                   │
+                   └─> Total time: ~20-30 seconds 
+
+Alternative Flow 1A: Employee Changes Mind
+   │
+   ├─> Previously opted out of Lunch
+   ├─> Plans change, wants to attend
+   └─> Clicks toggle to opt back in
+       │
+       └─> [Same API call with is_participating: true]
+           │
+           └─> Success: Back to opted-in status
+
+Alternative Flow 1B: Network Error
+   │
+   ├─> Employee clicks toggle
+   ├─> [API request fails - network down]
+   └─> Error message: "Unable to update. Please try again."
+       │
+       └─> Employee can retry or contact support
+
+```
+
+Flow 2: Team Lead Managing Team Member's Participation
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Team Lead Exception Handling Workflow           │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Team member calls in sick, can't access system
+
+1. Team member calls Team Lead
+   │
+   ├─> "I'm sick today, won't make it to the office"
+   │
+   └─> Team Lead opens MHP application
+       │
+       └─> LOGIN as Team Lead
+           │
+           └─> TEAM LEAD DASHBOARD
+               │
+               ├─> Views: "Manage Team Participation"
+               │
+               ├─> Searches for team member:
+               │   ┌─────────────────────────────────────┐
+               │   │ Search: [John Doe        ] [Search]│
+               │   └─────────────────────────────────────┘
+               │
+               ├─> Results:
+               │   ┌─────────────────────────────────────────────────────┐
+               │   │ John Doe - Engineering                              │
+               │   │ Today's Participation:                              │
+               │   │   ✓ Lunch    ✓ Snacks    ✓ Iftar                   │
+               │   │                                                     │
+               │   │ [Update Participation]                              │
+               │   └─────────────────────────────────────────────────────┘
+               │
+               ├─> Clicks "Update Participation"
+               │
+               └─> PARTICIPATION UPDATE MODAL
+                   ┌─────────────────────────────────────────┐
+                   │ Update Participation for: John Doe      │
+                   │                                         │
+                   │ Date: Thursday, February 6, 2026        │
+                   │                                         │
+                   │ □ Lunch                                 │
+                   │ □ Snacks                                │
+                   │ □ Iftar                                 │
+                   │ □ Event Dinner                          │
+                   │ □ Optional Dinner                       │
+                   │                                         │
+                   │ [Cancel]  [Update All to Opted-Out]     │
+                   └─────────────────────────────────────────┘
+                   │
+                   ├─> Team Lead clicks "Update All to Opted-Out"
+                   │
+                   ├─> [API Calls: POST /api/meals/participation/admin]
+                   │   Multiple requests (one per meal type):
+                   │
+                   ├─> [System updates all records]
+                   │   - Sets is_participating = false for all meals
+                   │   - Records updated_by = teamlead@company.com
+                   │   - Records timestamp
+                   │
+                   └─> Success message:
+                       "Participation updated for John Doe"
+                       │
+                       └─> Team Lead closes modal
+                           │
+                           └─> Headcount automatically updated
+
+Total time: ~1-2 minutes 
+```
+
+Flow 3: Admin Viewing Headcount for Meal Planning
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│             Admin Daily Headcount Workflow                   │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Logistics team needs headcount for meal preparation
+
+1. Morning (9:00 AM) - Initial Count
+   │
+   └─> Admin opens MHP application
+       │
+       └─> LOGIN as Admin
+           │
+           └─> ADMIN DASHBOARD
+               │
+               ├─> Automatically shows: "Today's Headcount Summary"
+               │   ┌─────────────────────────────────────────────────┐
+               │   │ Thursday, February 6, 2026                      │
+               │   │                                                 │
+               │   │ Total Employees: 100                            │
+               │   │                                                 │
+               │   │ ┌─────────────────┬──────────┬─────────────┐   │
+               │   │ │ Meal Type       │ Count    │ Percentage  │   │
+               │   │ ├─────────────────┼──────────┼─────────────┤   │
+               │   │ │ Lunch           │    87    │    87%      │   │
+               │   │ │ Snacks          │    92    │    92%      │   │
+               │   │ │ Iftar           │    45    │    45%      │   │
+               │   │ │ Event Dinner    │     0    │     0%      │   │
+               │   │ │ Optional Dinner │    12    │    12%      │   │
+               │   │ └─────────────────┴──────────┴─────────────┘   │
+               │   │                                                 │
+               │   │ Last Updated: 9:00 AM                           │
+               │   │ [Refresh] [Export]                              │
+               │   └─────────────────────────────────────────────────┘
+               │
+               ├─> Admin notes numbers:
+               │   - Lunch: 87 people
+               │   - Snacks: 92 people
+               │
+               └─> Communicates to kitchen staff:
+                   "Prepare lunch for 90 people (with buffer)"
+
+2. Late Morning (11:30 AM) - Final Count Before Lunch
+   │
+   └─> Admin refreshes dashboard
+       │
+       ├─> [API Call: GET /api/meals/headcount/today]
+       │
+       ├─> [System recalculates from latest data]
+       │
+       └─> Updated counts:
+           ┌─────────────────────────────────────────────────┐
+           │ Lunch           │    85    │    85%      │ ⬇ -2  │
+           │ Snacks          │    93    │    93%      │ ⬆ +1  │
+           └─────────────────────────────────────────────────┘
+           │
+           └─> Admin notes changes and confirms with kitchen
+
+Total time: ~20 seconds per check 
+(vs. 10-15 minutes with Excel)
+```
+
+Flow 4: New Employee Registration
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              New Employee Self-Registration                  │
+└─────────────────────────────────────────────────────────────┘
+
+1. New employee receives welcome email
+   │
+   ├─> Email contains: MHP application URL
+   │
+   └─> Opens URL in browser
+       │
+       └─> LANDING PAGE
+           │
+           ├─> Sees: "Login" and "Register" buttons
+           │
+           └─> Clicks "Register"
+               │
+               └─> REGISTRATION PAGE
+                   ┌─────────────────────────────────────┐
+                   │ Create Your Account                 │
+                   │                                     │
+                   │ Full Name: [               ]        │
+                   │ Email:     [               ]        │
+                   │ Password:  [               ]        │
+                   │ Confirm:   [               ]        │
+                   │ Department:[               ]        │
+                   │                                     │
+                   │ [Cancel]  [Register]                │
+                   └─────────────────────────────────────┘
+                   │
+                   ├─> Fills in details:
+                   │   - Name: "Alice Johnson"
+                   │   - Email: "alice.johnson@company.com"
+                   │   - Password: "SecurePass123!"
+                   │   - Department: "Marketing"
+                   │
+                   ├─> Clicks "Register"
+                   │
+                   ├─> [Frontend Validation]
+                   │
+                   ├─> [API Call: POST /api/users/register]
+                   │   Request: {
+                   │     name: "Alice Johnson",
+                   │     email: "alice.johnson@company.com",
+                   │     password: "SecurePass123!",
+                   │     department: "Marketing"
+                   │   }
+                   │
+                   ├─> [Backend Processing]
+                   │
+                   ├─> [Response: 201 Created]
+                   │
+                   └─> Success page:
+                       "Account created successfully!"
+                       │
+                       └─> Auto-redirect to login page
+                           │
+                           └─> Employee logs in with new credentials
+                               │
+                               └─> Sees employee dashboard with today's meals
+
+Alternative Flow 4A: Email Already Registered
+   │
+   ├─> Registration fails
+   └─> Error: "An account with this email already exists"
+       │
+       └─> User can click "Login" instead
+
+Total time: ~2 minutes 
+```
+
+### 4. Authentication and Authorization
 
 ```
 ● Build the login system in auth.py, using password hashing with passlib(bcrypt). JWT
@@ -110,7 +609,7 @@ dependencies:
 {require_employee(); require_team_lead(); require_admin()}.
 ● Implement FastAPI {Depends()} decorator to protect routes.
 ```
-### 4. Backend API Development
+### 5. Backend API Development
 
 Create routers in routers/ directory:
 ```
@@ -153,12 +652,12 @@ FastAPI features to be used:
 ## Implementation Priority
 
 ### Phase 1 (Core MVP)
-1. ✅ POST /api/auth/login
-2. ✅ POST /api/users/register
-3. ✅ GET /api/users/me
-4. ✅ GET /api/meals/today
-5. ✅ PUT /api/meals/participation
-6. ✅ GET /api/meals/headcount/today
+1. POST /api/auth/login
+2. POST /api/users/register
+3. GET /api/users/me
+4. GET /api/meals/today
+5. PUT /api/meals/participation
+6. GET /api/meals/headcount/today
 
 ### Phase 2 (Admin Features)
 7. POST /api/users/create
@@ -170,7 +669,7 @@ FastAPI features to be used:
 11. PUT /api/users/{user_id}
 12. DELETE /api/users/{user_id}
 
-### 5. Frontend Development
+### 6. Frontend Development
 
 Initialize a React app with Vite and install dependencies using react-router-dom, axios. Create
 API service layer in services/api.js. Set up the auth context for global user state.
@@ -195,15 +694,30 @@ Implement auth context for user session and token for state management. Local st
 participation data and API calls wrapped in try-catch with loading states.
 
 
-### 6. Other Logic Implementation
+### 7. Other Logic Implementation
 
 Default all employees to “opted-in” for all meals, while also allowing employees to toggle
 participation status. Prevent duplicate entries for the same user/date/meal. Calculate real-time
 headcount aggregations, and validate role permissions for admin actions.
 
-### 7. Documentation, Testing and Validation
+### 8. Documentation, Testing and Validation
 
 Test authentication flow for all roles and feature verifications.
+
+**Testing Pyramid:**
+```
+         /\
+        /  \
+       / E2E \           10% - End-to-End Tests
+      /______\
+     /        \
+    / Integr.  \        30% - Integration Tests
+   /____________\
+  /              \
+ /   Unit Tests   \     60% - Unit Tests
+/__________________\
+```
+
 
 - Verify employee can opt-in/out correctly
 - Verify admin can update on behalf of employees
@@ -211,29 +725,180 @@ Test authentication flow for all roles and feature verifications.
 Add a README with setup instructions and API documentation (endpoints, payloads,
 responses). Add an user guide for each role with a sample .env configuration.
 
-### 8. Local Deployment
+### 9. Local Deployment/Operations
 
-```
-● Create startup scripts:
-○ Backend: uvicorn app.main:app --reload --port 8000
-○ Frontend: npm run dev (Vite dev server on port 5173)
-● Document environment variables needed:
-○ Backend .env: SECRET_KEY, ALGORITHM,
-ACCESS_TOKEN_EXPIRE_MINUTES
-○ Frontend .env: VITE_API_URL=http://localhost:
-● Provide instructions for first-time setup:
-# Backend
+**Single Command Startup:**
+Create a startup script `start.sh`:
+```bash
+#!/bin/bash
+
+# Start backend
 cd backend
-python -m venv venv
-source venv/bin/activate # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-# Frontend (new terminal)
-cd frontend
-npm install
-npm run dev
-● Test end-to-end on fresh installation
+source venv/bin/activate
+uvicorn app.main:app --reload --port 8000 &
+BACKEND_PID=$!
+
+# Start frontend
+cd ../frontend
+npm run dev &
+FRONTEND_PID=$!
+
+echo "Backend PID: $BACKEND_PID"
+echo "Frontend PID: $FRONTEND_PID"
+echo ""
+echo "Application started!"
+echo "Frontend: http://localhost:5173"
+echo "Backend API: http://localhost:8000"
+echo ""
+echo "Press Ctrl+C to stop both servers"
+
+# Wait for Ctrl+C
+trap "kill $BACKEND_PID $FRONTEND_PID; exit" INT
+wait
 ```
+
+**Windows Version (start.bat):**
+```batch
+@echo off
+start "Backend" cmd /k "cd backend && venv\Scripts\activate && uvicorn app.main:app --reload --port 8000"
+start "Frontend" cmd /k "cd frontend && npm run dev"
+echo.
+echo Application started!
+echo Frontend: http://localhost:5173
+echo Backend API: http://localhost:8000
+echo API Docs: http://localhost:8000/docs
+```
+
+#### Common Issues
+
+**Issue 1: Backend won't start**
+```
+Error: Port 8000 already in use
+
+Solution:
+# Find process using port 8000
+lsof -i :8000  # macOS/Linux
+netstat -ano | findstr :8000  # Windows
+
+# Kill the process
+kill -9 <PID>
+```
+
+**Issue 2: Frontend can't connect to backend**
+```
+Error: CORS error / Network error
+
+Solution:
+1. Verify backend is running (http://localhost:8000/docs)
+2. Check VITE_API_URL in frontend/.env
+3. Verify CORS configuration in backend/app/main.py
+```
+
+**Issue 3: JSON file corrupted**
+```
+Error: JSONDecodeError
+
+Solution:
+1. Stop application
+2. Restore from latest backup
+3. Investigate cause (concurrent writes, system crash)
+4. Implement file locking if needed
+```
+
+**Issue 4: Token expired**
+```
+Error: 401 Unauthorized
+
+Solution:
+This is expected behavior (30 min expiration)
+User should log in again
+```
+---
+## Risks, Assumptions, and Open Questions
+
+### Risks
+#### High Priority Risks
+
+**Risk 1: Data Loss Due to File Corruption**
+- **Likelihood:** Medium
+- **Impact:** High
+- **Mitigation:**
+  - Implement atomic file writes
+  - Daily automated backups
+- **Contingency:** Restore from latest backup (max 1 day data loss)
+
+**Risk 2: Concurrent Write Conflicts**
+- **Likelihood:** Medium (100+ users)
+- **Impact:** Medium (data inconsistency)
+- **Mitigation:**
+  - Implement file locking mechanism
+  - User feedback on conflicts
+- **Contingency:** Manual data correction by admin
+
+**Risk 3: Low User Adoption**
+- **Likelihood:** Low
+- **Impact:** High (project failure)
+- **Mitigation:**
+  - Simple, intuitive UI design
+  - Training session before launch
+- **Contingency:** Iterate on UI based on feedback
+
+**Risk 4: Performance Degradation with Scale**
+- **Likelihood:** Low (for 100 users)
+- **Impact:** Medium
+- **Mitigation:**
+  - Performance testing before launch
+- **Contingency:** Accelerate database migration
+
+#### Medium Priority Risks
+
+**Risk 5: Security Breach**
+- **Likelihood:** Low
+- **Impact:** High
+- **Mitigation:**
+  - bcrypt password hashing
+  - JWT token security
+  - Input validation
+- **Contingency:** Password reset for all users
+
+**Risk 6: Browser Compatibility Issues**
+- **Likelihood:** Low
+- **Impact:** Low
+- **Mitigation:**
+  - Test on Chrome, Firefox, Edge
+  - Use standard web APIs
+- **Contingency:** Document supported browsers
+
+**Risk 7: Developer Availability**
+- **Likelihood:** Medium
+- **Impact:** Medium
+- **Mitigation:**
+  - Good documentation
+  - Simple architecture
+- **Contingency:** Knowledge transfer session
+
+### Assumptions
+
+#### Technical Assumptions
+
+1. **All employees have computer access** during work hours
+2. **Company network is reliable** (99%+ uptime during business hours)
+3. **JSON files sufficient for 6 months** before database migration needed
+
+#### Business Assumptions
+
+4. **Employees will check system daily** (not rely on notifications)
+5. **Current meal types will not change frequently** in Iteration 1
+6. **Default opt-in acceptable** to stakeholders and employees
+7. **30-minute token expiration acceptable** for security/UX balance
+
+#### Process Assumptions
+
+8. **Admins available during business hours** for support
+9. **Logistics team checks headcount 2-3 times per day** (not real-time requirement)
+10. **Same-day updates sufficient** (no advance planning needed in Iteration 1)
+
+---
 
 ## Key Design Decisions for Iteration
 
@@ -243,17 +908,5 @@ npm run dev
 3. **Simple storage** - File-based JSON (easy to migrate to DB later)
 4. **Minimal validation** - Basic role checks; advanced cutoff logic deferred to later iterations
 5. **Real-time counts** - Headcount calculated on-demand from participation records
-
-## Success Criteria
-
-```
-↳ Employees can log in and opt-out of today's meals
-↳ Team Leads/Admins can update participation for any employee
-↳ Logistics can view accurate headcount totals per meal type
-↳ System handles 100+ concurrent users
-↳ All three user roles work correctly
-↳ Data persists across app restarts
-```
-
 
 
