@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { mealsAPI, usersAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
-export default function AdminDashboard() {
+export default function TeamLeadDashboard() {
+  const { user } = useAuth();
   const [headcount, setHeadcount] = useState(null);
   const [users, setUsers] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -25,12 +27,12 @@ export default function AdminDashboard() {
       const today = new Date().toISOString().split('T')[0];
       const headcountPromise =
         selectedDate === today
-          ? mealsAPI.getTodayHeadcount()
-          : mealsAPI.getHeadcount(selectedDate);
+          ? mealsAPI.getDeptHeadcountToday()
+          : mealsAPI.getDeptHeadcount(selectedDate);
 
       const [headcountRes, usersRes] = await Promise.all([
         headcountPromise,
-        usersAPI.getAllUsers(),
+        usersAPI.getDepartmentUsers(),
       ]);
 
       setHeadcount(headcountRes.data.headcount);
@@ -61,11 +63,16 @@ export default function AdminDashboard() {
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-1">
-              Admin Dashboard
+              Team Lead Dashboard
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">
-              Real-time overview of office meal participation
-            </p>
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-sm">
+              <span className="material-icons-outlined text-primary text-base">
+                apartment
+              </span>
+              <span>
+                {user?.department || 'Department'} &mdash; department overview
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <input
@@ -79,6 +86,17 @@ export default function AdminDashboard() {
 
         <ErrorMessage message={error} onDismiss={() => setError('')} />
 
+        {/* Department badge */}
+        <div className="mb-10 flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-semibold">
+            <span className="material-icons-outlined text-base">business</span>
+            {user?.department}
+          </div>
+          <span className="text-xs text-slate-400">
+            Showing data only for your department
+          </span>
+        </div>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -90,7 +108,7 @@ export default function AdminDashboard() {
               </div>
             </div>
             <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-              Total Headcount
+              Dept Headcount
             </h3>
             <p className="text-3xl font-bold mt-1">{totalHeadcount}</p>
           </div>
@@ -123,7 +141,7 @@ export default function AdminDashboard() {
               </span>
             </div>
             <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-              Registered Users
+              Dept Members
             </h3>
             <p className="text-3xl font-bold mt-1">{totalUsers}</p>
           </div>
@@ -134,10 +152,15 @@ export default function AdminDashboard() {
           <HeadcountTable headcount={headcount} totalUsers={totalUsers} />
         </div>
 
-        {/* User Management */}
+        {/* Department Members */}
         <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-            <h2 className="font-bold text-lg">User Management</h2>
+            <h2 className="font-bold text-lg">
+              Department Members
+            </h2>
+            <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full">
+              {user?.department}
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -146,7 +169,6 @@ export default function AdminDashboard() {
                   <th className="px-6 py-4 font-semibold">Name</th>
                   <th className="px-6 py-4 font-semibold">Email</th>
                   <th className="px-6 py-4 font-semibold">Role</th>
-                  <th className="px-6 py-4 font-semibold">Department</th>
                   <th className="px-6 py-4 font-semibold">Status</th>
                 </tr>
               </thead>
@@ -177,9 +199,6 @@ export default function AdminDashboard() {
                         {u.role?.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                      {u.department || '—'}
-                    </td>
                     <td className="px-6 py-4">
                       {u.is_active ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
@@ -200,7 +219,8 @@ export default function AdminDashboard() {
           </div>
           <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
             <span className="text-xs text-slate-500">
-              Showing {users.length} of {totalUsers} users
+              Showing {users.length} member{users.length !== 1 ? 's' : ''} in{' '}
+              {user?.department}
             </span>
           </div>
         </section>
