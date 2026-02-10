@@ -1,35 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
+import PrivateRoute from './components/PrivateRoute';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import EmployeeDashboard from './pages/EmployeeDashboard';
+import AdminDashboard from './pages/AdminDashboard';
+import TeamLeadDashboard from './pages/TeamLeadDashboard';
+import Loading from './components/Loading';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+function RootRedirect() {
+  const { user, loading, isAuthenticated } = useAuth();
+  if (loading) return <Loading />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user.role === 'admin') return <Navigate to="/admin" replace />;
+  if (user.role === 'team_lead') return <Navigate to="/team-lead" replace />;
+  return <Navigate to="/dashboard" replace />;
 }
 
-export default App
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* Employee dashboard */}
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute requiredRoles={['employee']}>
+              <EmployeeDashboard />
+            </PrivateRoute>
+          }
+        />
+
+        {/* Team Lead dashboard */}
+        <Route
+          path="/team-lead"
+          element={
+            <PrivateRoute requiredRoles={['team_lead']}>
+              <TeamLeadDashboard />
+            </PrivateRoute>
+          }
+        />
+
+        {/* Admin dashboard */}
+        <Route
+          path="/admin"
+          element={
+            <PrivateRoute requiredRoles={['admin']}>
+              <AdminDashboard />
+            </PrivateRoute>
+          }
+        />
+
+        {/* Root redirect */}
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+export default App;
