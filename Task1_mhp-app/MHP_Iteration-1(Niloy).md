@@ -717,8 +717,8 @@ Test authentication flow for all roles and feature verifications.
   for the next day
 - This snapshot is what gets notified to the logistics team
 - Any employee opt-in / opt-out after 9:00 PM:
-  - Is reflected in the admin dashboard
   - Is not included in the notification already sent
+  - Is disabled until count start for next snapshot
 - Admin dashboard updates are pull-based and do not trigger notifications
 ```
 - Verify admin can update on behalf of employees
@@ -884,6 +884,7 @@ User should log in again
 3. **Simple storage** - File-based JSON (easy to migrate to DB later)
 4. **Minimal validation** - Basic role checks; advanced cutoff logic deferred to later iterations
 5. **Real-time counts** - Headcount calculated on-demand from participation records
+
 
 
 
