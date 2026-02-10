@@ -182,21 +182,21 @@ def get_headcount_by_date(target_date: date) -> Dict[str, int]:
     return headcount
 
 
-def get_users_by_department(department: str) -> List[User]:
-    """Get all users in a specific department"""
+def get_users_by_team(team: str) -> List[User]:
+    """Get all users in a specific team"""
     all_users = get_all_users()
-    return [u for u in all_users if u.department and u.department.lower() == department.lower()]
+    return [u for u in all_users if u.team and u.team.lower() == team.lower()]
 
 
-def get_headcount_by_date_and_department(target_date: date, department: str) -> Dict[str, int]:
-    """Get headcount filtered by department for a specific date"""
-    dept_users = get_users_by_department(department)
-    dept_user_ids = {u.id for u in dept_users}
+def get_headcount_by_date_and_team(target_date: date, team: str) -> Dict[str, int]:
+    """Get headcount filtered by team for a specific date"""
+    team_users = get_users_by_team(team)
+    team_user_ids = {u.id for u in team_users}
     participation_records = get_participation_by_date(target_date)
     headcount = {meal_type.value: 0 for meal_type in MealType}
 
     for record in participation_records:
-        if record.is_participating and record.user_id in dept_user_ids:
+        if record.is_participating and record.user_id in team_user_ids:
             headcount[record.meal_type.value] += 1
 
     return headcount
@@ -230,21 +230,21 @@ def seed_initial_data() -> None:
             email="employee@test.com",
             password_hash=pwd_context.hash("employee"),
             role=UserRole.EMPLOYEE,
-            department="Engineering"
+            team="Engineering"
         ),
         User(
             name="Team Lead Test",
             email="teamlead@test.com",
             password_hash=pwd_context.hash("teamlead"),
             role=UserRole.TEAM_LEAD,
-            department="Engineering"
+            team="Engineering"
         ),
         User(
             name="Admin Test",
             email="admin@company.com",
             password_hash=pwd_context.hash("admin123"),
             role=UserRole.ADMIN,
-            department="Operations"
+            team="Operations"
         ),
     ]
     

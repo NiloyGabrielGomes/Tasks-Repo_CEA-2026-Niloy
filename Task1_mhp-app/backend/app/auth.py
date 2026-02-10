@@ -162,7 +162,7 @@ def create_token_response(user: User) -> dict:
             "name": user.name,
             "email": user.email,
             "role": user.role.value,
-            "department": user.department,
+            "team": user.team,
             "is_active": user.is_active
         }
     }

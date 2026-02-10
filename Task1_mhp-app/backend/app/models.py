@@ -27,7 +27,7 @@ class User(BaseModel):
     email: EmailStr
     password_hash: str
     role: UserRole = UserRole.EMPLOYEE
-    department: Optional[str] = Field(None, max_length=100)
+    team: Optional[str] = Field(None, max_length=100)
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.now)
 
@@ -38,7 +38,7 @@ class User(BaseModel):
                 "name": "John Doe",
                 "email": "john.doe@example.com",
                 "role": "employee",
-                "department": "Midas",
+                "team": "Midas",
                 "is_active": True,
                 "created_at": "2023-01-01T00:00:00Z"
             }

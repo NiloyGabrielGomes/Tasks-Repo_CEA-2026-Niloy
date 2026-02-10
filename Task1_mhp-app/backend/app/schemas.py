@@ -30,7 +30,7 @@ class LoginResponse(BaseModel):
                     "name": "John Doe",
                     "email": "john.doe@example.com",
                     "role": "employee",
-                    "department": "Midas"
+                    "team": "Midas"
                 }
             }
         }
@@ -41,7 +41,7 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     role: UserRole
-    department: Optional[str] = None
+    team: Optional[str] = None
     is_active: bool = True
 
     class Config:
@@ -51,7 +51,7 @@ class UserResponse(BaseModel):
                 "name": "John Doe",
                 "email": "john.doe@example.com",
                 "role": "employee",
-                "department": "Midas",
+                "team": "Midas",
                 "is_active": True
             }
         }
@@ -61,7 +61,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6)
     role: UserRole = UserRole.EMPLOYEE
-    department: Optional[str] = Field(None, max_length=100)
+    team: Optional[str] = Field(None, max_length=100)
 
     class Config:
         json_schema_extra = {
@@ -70,7 +70,7 @@ class UserCreate(BaseModel):
                 "email": "john.doe@example.com",
                 "password": "secure_password",
                 "role": "employee",
-                "department": "Midas"
+                "team": "Midas"
             }
         }
 
@@ -79,7 +79,7 @@ class UserRegister(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     email: EmailStr
     password: str = Field(..., min_length=6)
-    department: Optional[str] = Field(None, max_length=100)
+    team: Optional[str] = Field(None, max_length=100)
 
     class Config:
         json_schema_extra = {
@@ -87,7 +87,7 @@ class UserRegister(BaseModel):
                 "name": "John Doe",
                 "email": "john.doe@company.com",
                 "password": "securepassword123",
-                "department": "Engineering"
+                "team": "Engineering"
             }
         }
 
@@ -95,7 +95,7 @@ class UserRegister(BaseModel):
 class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     role: Optional[UserRole] = None
-    department: Optional[str] = Field(None, max_length=100)
+    team: Optional[str] = Field(None, max_length=100)
     is_active: Optional[bool] = None
 
     class Config:
@@ -103,7 +103,7 @@ class UserUpdate(BaseModel):
             "example": {
                 "name": "John Updated Doe",
                 "role": "TeamLead",
-                "department": "Engineering",
+                "team": "Engineering",
                 "is_active": True
             }
         }
@@ -122,7 +122,7 @@ class UserListResponse(BaseModel):
                         "name": "John Doe",
                         "email": "john@company.com",
                         "role": "Employee",
-                        "department": "Engineering",
+                        "team": "Engineering",
                         "is_active": True
                     }
                 ],
@@ -144,7 +144,7 @@ class UserCreateResponse(BaseModel):
                     "name": "John Doe",
                     "email": "john@company.com",
                     "role": "Employee",
-                    "department": "Engineering",
+                    "team": "Engineering",
                     "is_active": True
                 }
             }

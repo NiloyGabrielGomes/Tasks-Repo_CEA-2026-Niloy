@@ -67,7 +67,7 @@ async def register(request: UserRegister):
         email=request.email,
         password_hash=password_hash,
         role=UserRole.EMPLOYEE,
-        department=request.department,
+        team=request.team,
         is_active=True
     )
     
@@ -99,7 +99,7 @@ async def get_current_user(current_user: User = Depends(auth_service.get_current
         name=current_user.name,
         email=current_user.email,
         role=current_user.role,
-        department=current_user.department,
+        team=current_user.team,
         is_active=current_user.is_active
     )
 
