@@ -106,7 +106,6 @@ async def startup_event():
     print(f" Health Check: http://localhost:8000/health")
     print("=" * 60)
     storage.seed_initial_data()
-    from app import storage
     users = storage.get_all_users()
     
     if not users:
@@ -158,28 +157,6 @@ async def api_info():
             }
         }
     }
-
-# ===========================
-# Router Registration
-# ===========================
-
-app.include_router(
-    auth.router,
-    prefix="/api/auth",
-    tags=["Authentication"]
-)
-
-app.include_router(
-    users.router,
-    prefix="/api/users",
-    tags=["Users"]
-)
-
-app.include_router(
-    meals.router,
-    prefix="/api/meals",
-    tags=["Meals"]
-)
 
 # ===========================
 # Exception Handlers
