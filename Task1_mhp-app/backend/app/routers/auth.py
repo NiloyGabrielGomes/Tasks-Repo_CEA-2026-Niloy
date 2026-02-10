@@ -24,6 +24,12 @@ async def login(request: LoginRequest):
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is deactivated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     return auth_service.create_token_response(user)
 
@@ -41,7 +47,7 @@ async def register(request: UserRegister):
     existing_user = storage.get_user_by_email(request.email)
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered"
         )
     
@@ -66,7 +72,13 @@ async def register(request: UserRegister):
     )
     
     # Save user to storage
-    created_user = storage.create_user(new_user)
+    try:
+        created_user = storage.create_user(new_user)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
     
     # Log authentication attempt
     auth_service.log_authentication_attempt(request.email, True)
@@ -90,3 +102,13 @@ async def get_current_user(current_user: User = Depends(auth_service.get_current
         department=current_user.department,
         is_active=current_user.is_active
     )
+
+# ===========================
+# Logout Endpoint
+# ===========================
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout():
+    return {
+        "message": "Logout successful. Please remove the token from client storage."
+    }
