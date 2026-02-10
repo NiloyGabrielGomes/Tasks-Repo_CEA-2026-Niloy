@@ -293,9 +293,10 @@ configuration.
 ### 2. Data Models and Storage
 
 Define the following models in models.py using the Pydantic validation library:
-● User - id, name, email, password_hash, role, department, is_active, created_at
+● User - id, name, email, password_hash, role, team, is_active, created_at
 ● MealParticipation - id, user_id, date, meal_type, is_participating, updated_at
 ● MealType(enum) - Lunch, Snacks, Iftar, EventDinner, OptionalDinner
+   (Note: Iftar is not a default meal. Special meals like Iftar will be handled through admin configuration)
 ● UserRole(enum) - Employee, TeamLead, Admin
 Implement file-based JSON storage utilities in storage.py. Use {load_json(filename)} to
 read data, {save_json(filename, data)} to write data, and {get_by_id();
@@ -334,6 +335,8 @@ Flow 1: Employee Daily Check-in and Opt-out
                    │   │ ✓ Lunch         [Opted In ]    │
                    │   │ ✓ Snacks        [Opted In ]    │
                    │   │ ✓ Iftar         [Opted In ]    │
+                   │   │    ├─> Applicable  if enabled   │ ← Changed
+                   │   │        by admin config          │
                    │   │ ✓ Event Dinner  [Opted In ]    │
                    │   │ ✓ Optional Dinner [Opted In ]  │
                    │   └─────────────────────────────────┘
@@ -358,6 +361,8 @@ Flow 1: Employee Daily Check-in and Opt-out
                    │   │       │ ✗ Lunch         [Opted Out]    │  ← Changed
                    │   │       │ ✓ Snacks        [Opted In ]    │
                    │   │       │ ✓ Iftar         [Opted In ]    │
+                   │   │       │   ├─> Applicable  if enabled   │ ← Changed
+                   │   │       │        by admin config         │
                    │   │       │ ✓ Event Dinner  [Opted In ]    │
                    │   │       │ ✓ Optional Dinner [Opted In ]  │
                    │   │       └─────────────────────────────────┘
@@ -436,6 +441,8 @@ Scenario: Team member calls in sick, can't access system
                    │ □ Lunch                                 │
                    │ □ Snacks                                │
                    │ □ Iftar                                 │
+                   │    ├─> Applicable  if enabled           │ ← Changed
+                   │        by admin config                  │
                    │ □ Event Dinner                          │
                    │ □ Optional Dinner                       │
                    │                                         │
@@ -469,9 +476,9 @@ Flow 3: Admin Viewing Headcount for Meal Planning
 │             Admin Daily Headcount Workflow                   │
 └─────────────────────────────────────────────────────────────┘
 
-Scenario: Logistics team needs headcount for meal preparation
+Scenario: Logistics team needs headcount for meal preparation ← Changed
 
-1. Morning (9:00 AM) - Initial Count
+1. Evening (9:00 PM) - Initial count for the day after (After cut-off time)
    │
    └─> Admin opens MHP application
        │
@@ -485,18 +492,18 @@ Scenario: Logistics team needs headcount for meal preparation
                │   │                                                 │
                │   │ Total Employees: 100                            │
                │   │                                                 │
-               │   │ ┌─────────────────┬──────────┬─────────────┐   │
-               │   │ │ Meal Type       │ Count    │ Percentage  │   │
-               │   │ ├─────────────────┼──────────┼─────────────┤   │
-               │   │ │ Lunch           │    87    │    87%      │   │
-               │   │ │ Snacks          │    92    │    92%      │   │
-               │   │ │ Iftar           │    45    │    45%      │   │
-               │   │ │ Event Dinner    │     0    │     0%      │   │
-               │   │ │ Optional Dinner │    12    │    12%      │   │
-               │   │ └─────────────────┴──────────┴─────────────┘   │
+               │   │ ┌─────────────────┬──────────┬─────────────┐    │
+               │   │ │ Meal Type       │ Count    │ Percentage  │    │
+               │   │ ├─────────────────┼──────────┼─────────────┤    │
+               │   │ │ Lunch           │    87    │    87%      │    │
+               │   │ │ Snacks          │    92    │    92%      │    │
+               │   │ │ Iftar           │    45    │    45%      │    │
+               │   │ │ Event Dinner    │     0    │     0%      │    │
+               │   │ │ Optional Dinner │    12    │    12%      │    │
+               │   │ └─────────────────┴──────────┴─────────────┘    │
                │   │                                                 │
-               │   │ Last Updated: 9:00 AM                           │
-               │   │ [Refresh] [Export]                              │
+               │   │ Last Updated: 9:00 PM                           │
+               │   │ [Export]                                        │
                │   └─────────────────────────────────────────────────┘
                │
                ├─> Admin notes numbers:
@@ -505,22 +512,6 @@ Scenario: Logistics team needs headcount for meal preparation
                │
                └─> Communicates to kitchen staff:
                    "Prepare lunch for 90 people (with buffer)"
-
-2. Late Morning (11:30 AM) - Final Count Before Lunch
-   │
-   └─> Admin refreshes dashboard
-       │
-       ├─> [API Call: GET /api/meals/headcount/today]
-       │
-       ├─> [System recalculates from latest data]
-       │
-       └─> Updated counts:
-           ┌─────────────────────────────────────────────────┐
-           │ Lunch           │    85    │    85%      │ ⬇ -2  │
-           │ Snacks          │    93    │    93%      │ ⬆ +1  │
-           └─────────────────────────────────────────────────┘
-           │
-           └─> Admin notes changes and confirms with kitchen
 
 Total time: ~20 seconds per check 
 (vs. 10-15 minutes with Excel)
@@ -553,7 +544,7 @@ Flow 4: New Employee Registration
                    │ Email:     [               ]        │
                    │ Password:  [               ]        │
                    │ Confirm:   [               ]        │
-                   │ Department:[               ]        │
+                   │ Teams:     [               ]        │ ← Changed
                    │                                     │
                    │ [Cancel]  [Register]                │
                    └─────────────────────────────────────┘
@@ -562,7 +553,7 @@ Flow 4: New Employee Registration
                    │   - Name: "Alice Johnson"
                    │   - Email: "alice.johnson@company.com"
                    │   - Password: "SecurePass123!"
-                   │   - Department: "Marketing"
+                   │   - team: "Marketing"                 ← Changed
                    │
                    ├─> Clicks "Register"
                    │
@@ -573,7 +564,7 @@ Flow 4: New Employee Registration
                    │     name: "Alice Johnson",
                    │     email: "alice.johnson@company.com",
                    │     password: "SecurePass123!",
-                   │     department: "Marketing"
+                   │     team: "Marketing"                ← Changed
                    │   }
                    │
                    ├─> [Backend Processing]
@@ -720,56 +711,41 @@ Test authentication flow for all roles and feature verifications.
 
 
 - Verify employee can opt-in/out correctly
+```
+- All verification related to meal participation and headcount must respect the 9:00 PM snapshot rule
+- The system generates a single authoritative headcount snapshot at 9:00 PM
+  for the next day
+- This snapshot is what gets notified to the logistics team
+- Any employee opt-in / opt-out after 9:00 PM:
+  - Is reflected in the admin dashboard
+  - Is not included in the notification already sent
+- Admin dashboard updates are pull-based and do not trigger notifications
+```
 - Verify admin can update on behalf of employees
 - Test headcount calculations accuracy
 Add a README with setup instructions and API documentation (endpoints, payloads,
 responses). Add an user guide for each role with a sample .env configuration.
 
-### 9. Local Deployment/Operations
+### 9. Local Deployment/Operations ← Changed
 
-**Single Command Startup:**
-Create a startup script `start.sh`:
-```bash
-#!/bin/bash
+**Deployment Strategy:**
 
-# Start backend
-cd backend
-source venv/bin/activate
-uvicorn app.main:app --reload --port 8000 &
-BACKEND_PID=$!
+**Development Environment:**
+- Backend: Use uvicorn with port 8000
+- Frontend: `npm run dev` (Vite dev server on port 5173)
 
-# Start frontend
-cd ../frontend
-npm run dev &
-FRONTEND_PID=$!
+**Monitoring Strategy:**
+- Application logs to file and console
+- Health check endpoint at /health
+- Authentication attempt logging
+- Update attempt logging (including cutoff violations)
 
-echo "Backend PID: $BACKEND_PID"
-echo "Frontend PID: $FRONTEND_PID"
-echo ""
-echo "Application started!"
-echo "Frontend: http://localhost:5173"
-echo "Backend API: http://localhost:8000"
-echo ""
-echo "Press Ctrl+C to stop both servers"
+**Backup Strategy:**
+- Daily automated JSON file backups
+- 30-day retention policy
+- Manual backup before major updates
 
-# Wait for Ctrl+C
-trap "kill $BACKEND_PID $FRONTEND_PID; exit" INT
-wait
-```
-
-**Windows Version (start.bat):**
-```batch
-@echo off
-start "Backend" cmd /k "cd backend && venv\Scripts\activate && uvicorn app.main:app --reload --port 8000"
-start "Frontend" cmd /k "cd frontend && npm run dev"
-echo.
-echo Application started!
-echo Frontend: http://localhost:5173
-echo Backend API: http://localhost:8000
-echo API Docs: http://localhost:8000/docs
-```
-
-#### Common Issues
+#### Common Issues 
 
 **Issue 1: Backend won't start**
 ```
@@ -908,5 +884,6 @@ User should log in again
 3. **Simple storage** - File-based JSON (easy to migrate to DB later)
 4. **Minimal validation** - Basic role checks; advanced cutoff logic deferred to later iterations
 5. **Real-time counts** - Headcount calculated on-demand from participation records
+
 
 
