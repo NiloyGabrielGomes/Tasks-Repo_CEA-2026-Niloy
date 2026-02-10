@@ -146,7 +146,7 @@ export default function AdminDashboard() {
                   <th className="px-6 py-4 font-semibold">Name</th>
                   <th className="px-6 py-4 font-semibold">Email</th>
                   <th className="px-6 py-4 font-semibold">Role</th>
-                  <th className="px-6 py-4 font-semibold">Department</th>
+                  <th className="px-6 py-4 font-semibold">Team</th>
                   <th className="px-6 py-4 font-semibold">Status</th>
                 </tr>
               </thead>
@@ -178,7 +178,7 @@ export default function AdminDashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
-                      {u.department || '—'}
+                      {u.team || '—'}
                     </td>
                     <td className="px-6 py-4">
                       {u.is_active ? (

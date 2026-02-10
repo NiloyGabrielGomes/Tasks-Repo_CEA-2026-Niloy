@@ -75,7 +75,7 @@ export default function Navbar() {
                 {user?.name}
               </p>
               <p className="text-[10px] text-slate-500">
-                {user?.department || user?.role}
+                {user?.team || user?.role}
               </p>
             </div>
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">

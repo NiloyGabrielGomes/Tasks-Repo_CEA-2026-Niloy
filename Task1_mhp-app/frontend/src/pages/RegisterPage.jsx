@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ErrorMessage from '../components/ErrorMessage';
 
-const DEPARTMENTS = [
+const TEAMS = [
   'Engineering',
   'Marketing',
   'Human Resources',
@@ -15,7 +15,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [department, setDepartment] = useState('');
+  const [team, setTeam] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -42,7 +42,7 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const user = await register(name, email, password, department || null);
+      const user = await register(name, email, password, team || null);
       if (user.role === 'admin') {
         navigate('/admin');
       } else if (user.role === 'team_lead') {
@@ -120,24 +120,24 @@ export default function RegisterPage() {
               />
             </div>
 
-            {/* Department */}
+            {/* Team */}
             <div>
               <label
-                htmlFor="department"
+                htmlFor="team"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
               >
-                Department (Optional)
+                Team (Optional)
               </label>
               <select
-                id="department"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
+                id="team"
+                value={team}
+                onChange={(e) => setTeam(e.target.value)}
                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 dark:text-white appearance-none"
               >
-                <option value="">Select your department</option>
-                {DEPARTMENTS.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
+                <option value="">Select your team</option>
+                {TEAMS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
                   </option>
                 ))}
               </select>
