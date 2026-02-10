@@ -180,3 +180,68 @@ app.include_router(
     prefix="/api/meals",
     tags=["Meals"]
 )
+
+# ===========================
+# Exception Handlers
+# ===========================
+
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "detail": "Validation Error",
+            "errors": exc.errors(),
+            "body": exc.body
+        }
+    )
+
+@app.exception_handler(ValueError)
+async def value_error_exception_handler(request: Request, exc: ValueError):
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "detail": str(exc),
+            "error_code": "VALUE_ERROR"
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    import traceback
+    
+    # Log the full error (in production, use proper logging)
+    print("=" * 60)
+    print("Unexpected Error:")
+    print(traceback.format_exc())
+    print("=" * 60)
+    
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "error_code": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred. Please try again later."
+        }
+    )
+
+
+# ===========================
+# Development Mode Configuration
+# ===========================
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,  # Auto-reload on code changes
+        log_level="info"
+    )
