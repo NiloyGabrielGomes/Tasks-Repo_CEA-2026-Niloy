@@ -172,19 +172,37 @@ async def update_meal_participation(
     )
 
 # ===========================
-# Get Headcount for Date
+# Get Department Headcount for Today
 # ===========================
 
-@router.get("/headcount/{target_date}", response_model=HeadcountResponse)
-async def get_headcount(
+@router.get("/headcount/department/today", response_model=HeadcountResponse)
+async def get_department_headcount_today(
+    current_user: User = Depends(auth_service.require_team_lead)
+):
+    """
+    Get headcount for the team lead's department for today
+    """
+    today = date.today()
+    headcount = storage.get_headcount_by_date_and_department(today, current_user.department)
+    
+    return HeadcountResponse(
+        date=today.isoformat(),
+        headcount=headcount
+    )
+
+# ===========================
+# Get Department Headcount for Specific Date
+# ===========================
+
+@router.get("/headcount/department/{target_date}", response_model=HeadcountResponse)
+async def get_department_headcount(
     target_date: date,
     current_user: User = Depends(auth_service.require_team_lead)
 ):
     """
-    Get headcount totals for each meal type on a specific date
-    Team Leads and Admin only
+    Get headcount for the team lead's department for a specific date
     """
-    headcount = storage.get_headcount_by_date(target_date)
+    headcount = storage.get_headcount_by_date_and_department(target_date, current_user.department)
     
     return HeadcountResponse(
         date=target_date.isoformat(),
@@ -208,5 +226,25 @@ async def get_today_headcount(
     
     return HeadcountResponse(
         date=today.isoformat(),
+        headcount=headcount
+    )
+
+# ===========================
+# Get Headcount for Date
+# ===========================
+
+@router.get("/headcount/{target_date}", response_model=HeadcountResponse)
+async def get_headcount(
+    target_date: date,
+    current_user: User = Depends(auth_service.require_team_lead)
+):
+    """
+    Get headcount totals for each meal type on a specific date
+    Team Leads and Admin only
+    """
+    headcount = storage.get_headcount_by_date(target_date)
+    
+    return HeadcountResponse(
+        date=target_date.isoformat(),
         headcount=headcount
     )
