@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from app.schemas import UserResponse, UserListResponse, UserUpdate
+from app.schemas import UserResponse, UserListResponse, UserUpdate, UserCreate
 from app.models import User, UserRole
 from app import auth as auth_service
 from app import storage
@@ -22,7 +22,7 @@ async def get_all_users(current_user: User = Depends(auth_service.require_team_l
             name=user.name,
             email=user.email,
             role=user.role,
-            department=user.department,
+            team=user.team,
             is_active=user.is_active
         )
         for user in all_users
@@ -31,25 +31,72 @@ async def get_all_users(current_user: User = Depends(auth_service.require_team_l
     return UserListResponse(users=user_responses, total=len(user_responses))
 
 # ===========================
-# Get Users in My Department
+# Admin Create User
 # ===========================
 
-@router.get("/department", response_model=UserListResponse)
-async def get_department_users(current_user: User = Depends(auth_service.require_team_lead)):
+@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def admin_create_user(
+    user_data: UserCreate,
+    current_user: User = Depends(auth_service.require_admin)
+):
     """
-    Get list of users in the current user's department - Team Lead and Admin
+    Create a new user with any role - Admin only
     """
-    dept_users = storage.get_users_by_department(current_user.department)
+    existing = storage.get_user_by_email(user_data.email)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered"
+        )
+    
+    password_hash = auth_service.hash_password(user_data.password)
+    
+    new_user = User(
+        name=user_data.name,
+        email=user_data.email,
+        password_hash=password_hash,
+        role=user_data.role,
+        team=user_data.team,
+        is_active=True
+    )
+    
+    try:
+        created_user = storage.create_user(new_user)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
+    
+    return UserResponse(
+        id=created_user.id,
+        name=created_user.name,
+        email=created_user.email,
+        role=created_user.role,
+        team=created_user.team,
+        is_active=created_user.is_active
+    )
+
+# ===========================
+# Get Users in My Team
+# ===========================
+
+@router.get("/team", response_model=UserListResponse)
+async def get_team_users(current_user: User = Depends(auth_service.require_team_lead)):
+    """
+    Get list of users in the current user's team - Team Lead and Admin
+    """
+    team_users = storage.get_users_by_team(current_user.team)
     user_responses = [
         UserResponse(
             id=user.id,
             name=user.name,
             email=user.email,
             role=user.role,
-            department=user.department,
+            team=user.team,
             is_active=user.is_active
         )
-        for user in dept_users
+        for user in team_users
     ]
     
     return UserListResponse(users=user_responses, total=len(user_responses))
@@ -82,7 +129,7 @@ async def get_user(user_id: str, current_user: User = Depends(auth_service.get_c
         name=user.name,
         email=user.email,
         role=user.role,
-        department=user.department,
+        team=user.team,
         is_active=user.is_active
     )
 
@@ -111,8 +158,8 @@ async def update_user(
         user.name = update_data.name
     if update_data.role is not None:
         user.role = update_data.role
-    if update_data.department is not None:
-        user.department = update_data.department
+    if update_data.team is not None:
+        user.team = update_data.team
     if update_data.is_active is not None:
         user.is_active = update_data.is_active
     
@@ -124,9 +171,39 @@ async def update_user(
         name=updated_user.name,
         email=updated_user.email,
         role=updated_user.role,
-        department=updated_user.department,
+        team=updated_user.team,
         is_active=updated_user.is_active
     )
+
+# ===========================
+# Deactivate User (Soft Delete)
+# ===========================
+
+@router.delete("/{user_id}")
+async def deactivate_user(
+    user_id: str,
+    current_user: User = Depends(auth_service.require_admin)
+):
+    """
+    Soft delete - deactivate a user. Admin only.
+    """
+    user = storage.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot deactivate your own account"
+        )
+    
+    user.is_active = False
+    storage.update_user(user)
+    
+    return {"message": f"User {user.name} has been deactivated"}
 
 # ===========================
 # Get Current User Profile
@@ -142,6 +219,6 @@ async def get_profile(current_user: User = Depends(auth_service.get_current_user
         name=current_user.name,
         email=current_user.email,
         role=current_user.role,
-        department=current_user.department,
+        team=current_user.team,
         is_active=current_user.is_active
     )
