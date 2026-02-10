@@ -181,6 +181,26 @@ def get_headcount_by_date(target_date: date) -> Dict[str, int]:
 
     return headcount
 
+
+def get_users_by_department(department: str) -> List[User]:
+    """Get all users in a specific department"""
+    all_users = get_all_users()
+    return [u for u in all_users if u.department and u.department.lower() == department.lower()]
+
+
+def get_headcount_by_date_and_department(target_date: date, department: str) -> Dict[str, int]:
+    """Get headcount filtered by department for a specific date"""
+    dept_users = get_users_by_department(department)
+    dept_user_ids = {u.id for u in dept_users}
+    participation_records = get_participation_by_date(target_date)
+    headcount = {meal_type.value: 0 for meal_type in MealType}
+
+    for record in participation_records:
+        if record.is_participating and record.user_id in dept_user_ids:
+            headcount[record.meal_type.value] += 1
+
+    return headcount
+
 def initialize_daily_participation(target_date: date) -> None:
     all_users = get_all_users()
     for user in all_users:
@@ -221,8 +241,8 @@ def seed_initial_data() -> None:
         ),
         User(
             name="Admin Test",
-            email="admin@test.com",
-            password_hash=pwd_context.hash("admin"),
+            email="admin@company.com",
+            password_hash=pwd_context.hash("admin123"),
             role=UserRole.ADMIN,
             department="Operations"
         ),

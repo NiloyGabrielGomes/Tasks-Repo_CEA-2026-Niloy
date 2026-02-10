@@ -11,9 +11,9 @@ router = APIRouter()
 # ===========================
 
 @router.get("", response_model=UserListResponse)
-async def get_all_users(current_user: User = Depends(auth_service.require_admin)):
+async def get_all_users(current_user: User = Depends(auth_service.require_team_lead)):
     """
-    Get list of all users - Admin only
+    Get list of all users - Team Lead and Admin
     """
     all_users = storage.get_all_users()
     user_responses = [
@@ -26,6 +26,30 @@ async def get_all_users(current_user: User = Depends(auth_service.require_admin)
             is_active=user.is_active
         )
         for user in all_users
+    ]
+    
+    return UserListResponse(users=user_responses, total=len(user_responses))
+
+# ===========================
+# Get Users in My Department
+# ===========================
+
+@router.get("/department", response_model=UserListResponse)
+async def get_department_users(current_user: User = Depends(auth_service.require_team_lead)):
+    """
+    Get list of users in the current user's department - Team Lead and Admin
+    """
+    dept_users = storage.get_users_by_department(current_user.department)
+    user_responses = [
+        UserResponse(
+            id=user.id,
+            name=user.name,
+            email=user.email,
+            role=user.role,
+            department=user.department,
+            is_active=user.is_active
+        )
+        for user in dept_users
     ]
     
     return UserListResponse(users=user_responses, total=len(user_responses))
