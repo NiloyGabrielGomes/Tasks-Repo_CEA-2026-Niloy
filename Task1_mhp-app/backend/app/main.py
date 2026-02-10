@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
 import os
 from dotenv import load_dotenv
 
@@ -15,18 +16,22 @@ load_dotenv()
 app = FastAPI(
     title="Meal Headcount Planner API",
     description="API for managing daily meal participation tracking",
-    version="1.0.0"
+    version="1.0.0",
+    contact={
+        "name": "MHP Support",
+        "email": "none@company.com"
+    }
 )
 
 # ===========================
 # CORS Middleware
 # ===========================
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+frontend_url = os.getenv("frontend_url", "http://localhost:5173,http://localhost:3000").split(",")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=frontend_url,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,9 +52,25 @@ app.include_router(meals.router, prefix="/api/meals", tags=["Meals"])
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint to verify API is running"""
+    from app import storage
+
+    try:
+        users = storage.get_all_users()
+        user_count = len(users)
+        storage_status = "ok"
+
+    except Exception as e:
+        user_count = 0
+        storage_status = f"error: {str(e)}"
     return {
         "status": "ok",
-        "message": "Meal Headcount Planner API is running"
+        "timestamp": datetime.now().isoformat(),
+        "message": "Meal Headcount Planner API is running",
+        "checks": {
+            "api": "ok",
+            "storage": storage_status,
+            "user_count": user_count
+        }
     }
 
 # ===========================
@@ -63,7 +84,10 @@ async def root():
         "api": "Meal Headcount Planner API",
         "version": "1.0.0",
         "docs": "/docs",
-        "openapi": "/openapi.json"
+        "openapi": "/openapi.json",
+        "redoc": "/redoc",
+        "health": "/health",
+        "api_base": "/api"
     }
 
 # ===========================
@@ -73,8 +97,26 @@ async def root():
 @app.on_event("startup")
 async def startup_event():
     """Initialize the application on startup"""
+    print("=" * 60)
     print("🚀 Starting Meal Headcount Planner API...")
+    print("=" * 60)
+    print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"🌐 Frontend URL: {frontend_url}")
+    print(f" API Docs: http://localhost:8000/docs")
+    print(f" Health Check: http://localhost:8000/health")
+    print("=" * 60)
     storage.seed_initial_data()
+    from app import storage
+    users = storage.get_all_users()
+    
+    if not users:
+        print("⚠️  No users found in database!")
+        print("💡 Run: python -m app.storage")
+        print("   to create seed data with test users")
+        print("=" * 60)
+    else:
+        print(f"✓ Found {len(users)} users in database")
+        print("=" * 60)
     print("✅ API started successfully")
 
 # ===========================
@@ -85,3 +127,56 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     print("👋 Shutting down Meal Headcount Planner API...")
+
+# ===========================
+# API Info Endpoint
+# ===========================
+
+@app.get("/api", tags=["Info"])
+async def api_info():
+    return{
+        "name": "Meal Headcount Planner API",
+        "version": "0.1.0",
+        "endpoints": {
+            "authentication": {
+                "login": "POST /api/auth/login",
+                "register": "POST /api/users/register"
+            },
+            "users": {
+                "me": "GET /api/users/me",
+                "create": "POST /api/users/create (Admin)",
+                "list": "GET /api/users (Admin)",
+                "get": "GET /api/users/{user_id} (TeamLead/Admin)",
+                "update": "PUT /api/users/{user_id} (Admin)",
+                "delete": "DELETE /api/users/{user_id} (Admin)"
+            },
+            "meals": {
+                "today": "GET /api/meals/today",
+                "update": "PUT /api/meals/participation",
+                "admin_update": "POST /api/meals/participation/admin (TeamLead/Admin)",
+                "headcount": "GET /api/meals/headcount/today (Admin)"
+            }
+        }
+    }
+
+# ===========================
+# Router Registration
+# ===========================
+
+app.include_router(
+    auth.router,
+    prefix="/api/auth",
+    tags=["Authentication"]
+)
+
+app.include_router(
+    users.router,
+    prefix="/api/users",
+    tags=["Users"]
+)
+
+app.include_router(
+    meals.router,
+    prefix="/api/meals",
+    tags=["Meals"]
+)
