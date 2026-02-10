@@ -44,8 +44,8 @@ export const authAPI = {
   login: (email, password) =>
     api.post('/api/auth/login', { email, password }),
 
-  register: (name, email, password, department) =>
-    api.post('/api/auth/register', { name, email, password, department }),
+  register: (name, email, password, team) =>
+    api.post('/api/auth/register', { name, email, password, team }),
 
   getMe: () => api.get('/api/auth/me'),
 };
@@ -72,11 +72,11 @@ export const mealsAPI = {
   getHeadcount: (targetDate) =>
     api.get(`/api/meals/headcount/${targetDate}`),
 
-  getDeptHeadcountToday: () =>
-    api.get('/api/meals/headcount/department/today'),
+  getTeamHeadcountToday: () =>
+    api.get('/api/meals/headcount/team/today'),
 
-  getDeptHeadcount: (targetDate) =>
-    api.get(`/api/meals/headcount/department/${targetDate}`),
+  getTeamHeadcount: (targetDate) =>
+    api.get(`/api/meals/headcount/team/${targetDate}`),
 };
 
 // ===========================
@@ -86,7 +86,7 @@ export const mealsAPI = {
 export const usersAPI = {
   getAllUsers: () => api.get('/api/users'),
 
-  getDepartmentUsers: () => api.get('/api/users/department'),
+  getTeamUsers: () => api.get('/api/users/team'),
 
   getUser: (userId) => api.get(`/api/users/${userId}`),
 
