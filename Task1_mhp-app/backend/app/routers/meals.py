@@ -28,8 +28,14 @@ class UserMealsResponse(BaseModel):
 class HeadcountResponse(BaseModel):
     date: str
     headcount: Dict[str, int]
+    total_employees: int = 0
 
 class UpdateParticipationRequest(BaseModel):
+    is_participating: bool
+
+class AdminParticipationOverrideRequest(BaseModel):
+    user_id: str
+    meal_type: str
     is_participating: bool
 
 # ===========================
@@ -172,41 +178,107 @@ async def update_meal_participation(
     )
 
 # ===========================
-# Get Department Headcount for Today
+# Admin/Team Lead Override Participation
 # ===========================
 
-@router.get("/headcount/department/today", response_model=HeadcountResponse)
-async def get_department_headcount_today(
+@router.post("/participation/admin", response_model=MealParticipationResponse)
+async def admin_update_participation(
+    request: AdminParticipationOverrideRequest,
     current_user: User = Depends(auth_service.require_team_lead)
 ):
     """
-    Get headcount for the team lead's department for today
+    Team Lead or Admin updates participation on behalf of an employee.
+    Team Leads can only update users in their team.
+    Records who made the update for audit trail.
     """
-    today = date.today()
-    headcount = storage.get_headcount_by_date_and_department(today, current_user.department)
+    # Get target user
+    target_user = storage.get_user_by_id(request.user_id)
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
-    return HeadcountResponse(
-        date=today.isoformat(),
-        headcount=headcount
+    # Team leads can only update their own team
+    if current_user.role == UserRole.TEAM_LEAD and current_user.team != target_user.team:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Can only update users in your team"
+        )
+    
+    # Validate meal type
+    try:
+        meal_enum = MealType(request.meal_type)
+    except ValueError:
+        valid_meals = ", ".join([m.value for m in MealType])
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid meal type. Valid options: {valid_meals}"
+        )
+    
+    today = date.today()
+    
+    # Update participation with audit trail (updated_by = admin/TL id)
+    updated = storage.update_participation(
+        user_id=request.user_id,
+        target_date=today,
+        meal_type=meal_enum,
+        is_participating=request.is_participating,
+        updated_by=current_user.id
+    )
+    
+    return MealParticipationResponse(
+        id=updated.id,
+        user_id=updated.user_id,
+        meal_type=updated.meal_type.value,
+        date=updated.date.isoformat(),
+        is_participating=updated.is_participating,
+        updated_by=updated.updated_by,
+        updated_at=updated.updated_at.isoformat()
     )
 
 # ===========================
-# Get Department Headcount for Specific Date
+# Get Team Headcount for Today
 # ===========================
 
-@router.get("/headcount/department/{target_date}", response_model=HeadcountResponse)
-async def get_department_headcount(
+@router.get("/headcount/team/today", response_model=HeadcountResponse)
+async def get_team_headcount_today(
+    current_user: User = Depends(auth_service.require_team_lead)
+):
+    """
+    Get headcount for the team lead's team for today
+    """
+    today = date.today()
+    headcount = storage.get_headcount_by_date_and_team(today, current_user.team)
+    team_users = storage.get_users_by_team(current_user.team)
+    total_active = len([u for u in team_users if u.is_active])
+    
+    return HeadcountResponse(
+        date=today.isoformat(),
+        headcount=headcount,
+        total_employees=total_active
+    )
+
+# ===========================
+# Get Team Headcount for Specific Date
+# ===========================
+
+@router.get("/headcount/team/{target_date}", response_model=HeadcountResponse)
+async def get_team_headcount(
     target_date: date,
     current_user: User = Depends(auth_service.require_team_lead)
 ):
     """
-    Get headcount for the team lead's department for a specific date
+    Get headcount for the team lead's team for a specific date
     """
-    headcount = storage.get_headcount_by_date_and_department(target_date, current_user.department)
+    headcount = storage.get_headcount_by_date_and_team(target_date, current_user.team)
+    team_users = storage.get_users_by_team(current_user.team)
+    total_active = len([u for u in team_users if u.is_active])
     
     return HeadcountResponse(
         date=target_date.isoformat(),
-        headcount=headcount
+        headcount=headcount,
+        total_employees=total_active
     )
 
 # ===========================
@@ -223,10 +295,13 @@ async def get_today_headcount(
     """
     today = date.today()
     headcount = storage.get_headcount_by_date(today)
+    all_users = storage.get_all_users()
+    total_active = len([u for u in all_users if u.is_active])
     
     return HeadcountResponse(
         date=today.isoformat(),
-        headcount=headcount
+        headcount=headcount,
+        total_employees=total_active
     )
 
 # ===========================
@@ -243,8 +318,11 @@ async def get_headcount(
     Team Leads and Admin only
     """
     headcount = storage.get_headcount_by_date(target_date)
+    all_users = storage.get_all_users()
+    total_active = len([u for u in all_users if u.is_active])
     
     return HeadcountResponse(
         date=target_date.isoformat(),
-        headcount=headcount
+        headcount=headcount,
+        total_employees=total_active
     )
