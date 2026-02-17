@@ -203,13 +203,30 @@ def get_headcount_by_date_and_team(target_date: date, team: str) -> Dict[str, in
     return headcount
 
 def initialize_daily_participation(target_date: date) -> None:
+    """Pre-create default participation records for all active users on the given date.
+
+    For each active user, any meal types that do not already have a record for
+    *target_date* will get a new default record (opted-in or opted-out based on
+    DEFAULT_OPTED_IN_MEALS).  Users who already have full records are skipped.
+    """
     all_users = get_all_users()
+    all_participation = get_all_participation()
+
+    # Build a lookup of existing records: { (user_id, meal_type_value) }
+    existing_keys = {
+        (p.user_id, p.meal_type.value)
+        for p in all_participation
+        if p.date == target_date
+    }
+
     for user in all_users:
         if not user.is_active:
             continue
 
-        existing = get_user_participation(user.id, target_date)
-        pass # If no records exist, they'll be created by get_user_participation
+        defaults = create_default_participation(user.id, target_date)
+        for record in defaults:
+            if (record.user_id, record.meal_type.value) not in existing_keys:
+                create_participation(record)
 
 # ===========================
 # Meal Configuration (Admin-controlled meal types)
