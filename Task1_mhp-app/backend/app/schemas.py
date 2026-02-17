@@ -239,7 +239,7 @@ class AdminParticipationUpdateRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "user_id": "123e4567-e89b-12d3-a456-426614174000",
-                "meal_type": "Lunch",
+                "meal_type": "lunch",
                 "is_participating": False
             }
         }
@@ -256,7 +256,7 @@ class AdminParticipationUpdateResponse(BaseModel):
                 "message": "Participation updated for user",
                 "user_name": "John Doe",
                 "participation": {
-                    "meal_type": "Lunch",
+                    "meal_type": "lunch",
                     "is_participating": False,
                     "updated_at": "2026-02-06T10:30:00"
                 }
@@ -274,11 +274,11 @@ class HeadcountResponse(BaseModel):
             "example": {
                 "date": "2026-02-06",
                 "headcount": {
-                    "Lunch": 87,
-                    "Snacks": 92,
-                    "Iftar": 45,
-                    "EventDinner": 0,
-                    "OptionalDinner": 12
+                    "lunch": 87,
+                    "snacks": 92,
+                    "iftar": 45,
+                    "event_dinner": 0,
+                    "optional_dinner": 12
                 },
                 "total_employees": 100
             }
