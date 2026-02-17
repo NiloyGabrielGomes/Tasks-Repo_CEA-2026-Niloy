@@ -69,13 +69,21 @@ class MealParticipation(BaseModel):
         }
 
 # Meals that employees are opted-in for by default.
-# Iftar is NOT a default meal — it requires admin configuration to enable.
+# Iftar and Event Dinner are NOT default meals — they require admin configuration to enable.
 DEFAULT_OPTED_IN_MEALS = {
     MealType.LUNCH,
     MealType.SNACKS,
-    MealType.EVENT_DINNER,
     MealType.OPTIONAL_DINNER,
 }
+
+# Meals that require admin to enable before they appear to employees.
+ADMIN_CONTROLLED_MEALS = {
+    MealType.IFTAR,
+    MealType.EVENT_DINNER,
+}
+
+# Cutoff hour (24h format). Employees cannot change participation after this hour.
+CUTOFF_HOUR = 21  # 9:00 PM
 
 def create_default_participation(user_id: str, target_date: date) -> list[MealParticipation]:
     return [
