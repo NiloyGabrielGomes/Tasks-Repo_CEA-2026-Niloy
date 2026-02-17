@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
 from app.models import UserRole, MealType
 
@@ -164,7 +164,58 @@ class MealInfo(BaseModel):
             }
         }
 
+# ===========================
+# Meal Participation Schemas (used by meals router)
+# ===========================
+
+class MealParticipationResponse(BaseModel):
+    id: str
+    user_id: str
+    meal_type: str
+    date: str
+    is_participating: bool
+    updated_by: str | None = None
+    updated_at: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "part-001",
+                "user_id": "user-1",
+                "meal_type": "lunch",
+                "date": "2026-02-17",
+                "is_participating": True,
+                "updated_by": "user-1",
+                "updated_at": "2026-02-17T10:30:00"
+            }
+        }
+
+class UserMealsResponse(BaseModel):
+    date: str
+    meals: List[MealParticipationResponse]
+    cutoff_passed: bool = False
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-02-17",
+                "meals": [
+                    {
+                        "id": "part-001",
+                        "user_id": "user-1",
+                        "meal_type": "lunch",
+                        "date": "2026-02-17",
+                        "is_participating": True,
+                        "updated_by": "user-1",
+                        "updated_at": "2026-02-17T10:30:00"
+                    }
+                ],
+                "cutoff_passed": False
+            }
+        }
+
 class TodayMealsResponse(BaseModel):
+    """Simplified today meals response using MealInfo."""
     date: date
     meals: list[MealInfo]
 
@@ -188,6 +239,16 @@ class TodayMealsResponse(BaseModel):
             }
         }
 
+class UpdateParticipationRequest(BaseModel):
+    is_participating: bool
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "is_participating": True
+            }
+        }
+
 class ParticipationUpdateRequest(BaseModel):
     meal_type: MealType
     is_participating: bool
@@ -200,22 +261,6 @@ class ParticipationUpdateRequest(BaseModel):
             }
         }
 
-class ParticipationUpdateResponse(BaseModel):
-    message: str
-    participation: 'ParticipationDetail'
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "message": "Participation updated successfully",
-                "participation": {
-                    "meal_type": "lunch",
-                    "is_participating": True,
-                    "updated_at": "2026-01-15T12:00:00Z"
-            }     
-        }
-    }
-        
 class ParticipationDetail(BaseModel):
     meal_type: MealType
     is_participating: bool
@@ -230,20 +275,35 @@ class ParticipationDetail(BaseModel):
             }
         }
 
-class AdminParticipationUpdateRequest(BaseModel):
+class ParticipationUpdateResponse(BaseModel):
+    message: str
+    participation: ParticipationDetail
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "Participation updated successfully",
+                "participation": {
+                    "meal_type": "lunch",
+                    "is_participating": True,
+                    "updated_at": "2026-01-15T12:00:00Z"
+            }     
+        }
+    }
+
+class AdminParticipationOverrideRequest(BaseModel):
     user_id: str
-    meal_type: MealType
+    meal_type: str
     is_participating: bool
 
     class Config:
         json_schema_extra = {
             "example": {
-                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "user_id": "user-1",
                 "meal_type": "lunch",
                 "is_participating": False
             }
         }
-
 
 class AdminParticipationUpdateResponse(BaseModel):
     message: str
@@ -263,11 +323,46 @@ class AdminParticipationUpdateResponse(BaseModel):
             }
         }
 
+# ===========================
+# Meal Configuration Schemas
+# ===========================
+
+class MealConfigResponse(BaseModel):
+    enabled_meals: Dict[str, bool]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "enabled_meals": {
+                    "lunch": True,
+                    "snacks": True,
+                    "iftar": False,
+                    "event_dinner": False,
+                    "optional_dinner": True
+                }
+            }
+        }
+
+class MealConfigUpdateRequest(BaseModel):
+    meal_type: str
+    enabled: bool
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "meal_type": "iftar",
+                "enabled": True
+            }
+        }
+
+# ===========================
+# Headcount Schemas
+# ===========================
 
 class HeadcountResponse(BaseModel):
-    date: date
-    headcount: Dict[str, int]  
-    total_employees: int
+    date: str
+    headcount: Dict[str, int]
+    total_employees: int = 0
 
     class Config:
         json_schema_extra = {
