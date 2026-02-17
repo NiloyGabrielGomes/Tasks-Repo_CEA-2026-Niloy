@@ -62,9 +62,39 @@ export default function AdminDashboard() {
   // Search/filter
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Meal configuration state
+  const [mealConfig, setMealConfig] = useState({});
+  const [mealConfigLoading, setMealConfigLoading] = useState(false);
+
   useEffect(() => {
     fetchData();
+    fetchMealConfig();
   }, [selectedDate]);
+
+  const fetchMealConfig = async () => {
+    try {
+      const res = await mealsAPI.getMealConfig();
+      setMealConfig(res.data.meals);
+    } catch (err) {
+      // Non-critical, just log
+      console.error('Failed to load meal config:', err);
+    }
+  };
+
+  const handleToggleMealConfig = async (mealType, currentEnabled) => {
+    setMealConfigLoading(true);
+    try {
+      await mealsAPI.updateMealConfig(mealType, !currentEnabled);
+      setMealConfig((prev) => ({ ...prev, [mealType]: !currentEnabled }));
+      setSuccess(`${mealType.replace('_', ' ')} has been ${!currentEnabled ? 'enabled' : 'disabled'}.`);
+      // Refresh headcount since enabled meals changed
+      fetchData();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update meal configuration.');
+    } finally {
+      setMealConfigLoading(false);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -284,6 +314,68 @@ export default function AdminDashboard() {
         <div className="mb-10">
           <HeadcountTable headcount={headcount} totalUsers={activeUsers} />
         </div>
+
+        {/* Meal Configuration */}
+        <section className="mb-10 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
+            <h2 className="font-bold text-lg flex items-center gap-2">
+              <span className="material-icons-outlined text-primary">tune</span>
+              Meal Configuration
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Enable or disable optional meal types. Disabled meals are hidden from all employees.
+            </p>
+          </div>
+          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {MEAL_TYPES.map((mt) => {
+              const isEnabled = mealConfig[mt.value] ?? true;
+              const isAdminControlled = mt.value === 'iftar' || mt.value === 'event_dinner';
+              return (
+                <div
+                  key={mt.value}
+                  className={`flex items-center justify-between p-4 rounded-lg border ${
+                    isAdminControlled
+                      ? 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10'
+                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isEnabled ? 'bg-primary/10 text-primary' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
+                      <span className="material-icons-outlined text-sm">
+                        {mt.value === 'lunch' ? 'lunch_dining' : mt.value === 'snacks' ? 'cookie' : mt.value === 'iftar' ? 'brightness_3' : mt.value === 'event_dinner' ? 'celebration' : 'nightlight_round'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{mt.label}</p>
+                      <p className="text-xs text-slate-400">
+                        {isAdminControlled ? 'Admin-controlled' : 'Always available'}
+                      </p>
+                    </div>
+                  </div>
+                  {isAdminControlled ? (
+                    <button
+                      onClick={() => handleToggleMealConfig(mt.value, isEnabled)}
+                      disabled={mealConfigLoading}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        isEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'
+                      } ${mealConfigLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          isEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-full">
+                      Always On
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         {/* User Management */}
         <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">

@@ -85,6 +85,11 @@ export const mealsAPI = {
 
   getTeamHeadcount: (targetDate) =>
     api.get(`/api/meals/headcount/team/${targetDate}`),
+
+  getMealConfig: () => api.get('/api/meals/config'),
+
+  updateMealConfig: (mealType, enabled) =>
+    api.put('/api/meals/config', { meal_type: mealType, enabled }),
 };
 
 // ===========================

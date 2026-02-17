@@ -9,6 +9,7 @@ import ErrorMessage from '../components/ErrorMessage';
 export default function EmployeeDashboard() {
   const { user } = useAuth();
   const [meals, setMeals] = useState([]);
+  const [cutoffPassed, setCutoffPassed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,6 +35,7 @@ export default function EmployeeDashboard() {
     try {
       const res = await mealsAPI.getTodayMeals();
       setMeals(res.data.meals);
+      setCutoffPassed(res.data.cutoff_passed ?? false);
       setError('');
     } catch (err) {
       setError('Failed to load meals. Please try again.');
@@ -43,6 +45,10 @@ export default function EmployeeDashboard() {
   };
 
   const handleToggle = async (meal, newValue) => {
+    if (cutoffPassed) {
+      setError('Meal preferences are locked after 9:00 PM. You can update again tomorrow morning.');
+      return;
+    }
     try {
       await mealsAPI.updateParticipation(
         user.id,
@@ -87,10 +93,20 @@ export default function EmployeeDashboard() {
 
         <ErrorMessage message={error} onDismiss={() => setError('')} />
 
+        {/* Cutoff Banner */}
+        {cutoffPassed && (
+          <div className="mb-6 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-4 flex items-center gap-3">
+            <span className="material-icons-outlined text-amber-500">lock_clock</span>
+            <p className="text-amber-800 dark:text-amber-200 text-sm font-medium">
+              Meal preferences are locked after 9:00 PM. You can update again tomorrow morning.
+            </p>
+          </div>
+        )}
+
         {/* Meal Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {meals.map((meal) => (
-            <MealCard key={meal.id} meal={meal} onToggle={handleToggle} />
+            <MealCard key={meal.id} meal={meal} onToggle={handleToggle} disabled={cutoffPassed} />
           ))}
         </div>
 
@@ -103,7 +119,7 @@ export default function EmployeeDashboard() {
               </span>
               <h2 className="text-2xl font-bold mb-4">Office Food Policy</h2>
               <p className="text-white/80 text-sm leading-relaxed mb-6">
-                Remember to toggle your preferences before 10:00 AM each day to
+                Remember to toggle your preferences before 9:00 PM each day to
                 ensure minimal food waste. Special dietary requests can be
                 managed in settings.
               </p>
