@@ -40,7 +40,7 @@ export default function MealCard({ meal, onToggle, disabled }) {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900/50 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-all hover:shadow-md hover:border-primary/30">
+    <div className={`bg-white dark:bg-slate-900/50 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-all ${disabled ? 'opacity-60' : 'hover:shadow-md hover:border-primary/30'}`}>
       <div>
         <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary mb-4">
           <span className="material-icons-outlined">
@@ -56,20 +56,28 @@ export default function MealCard({ meal, onToggle, disabled }) {
       </div>
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
         <span className="text-xs font-medium text-slate-400">
-          {isOn ? 'Opting In' : 'Opted Out'}
+          {disabled ? (
+            <span className="flex items-center gap-1">
+              <span className="material-icons-outlined text-xs">lock</span>
+              Locked
+            </span>
+          ) : isOn ? 'Opting In' : 'Opted Out'}
         </span>
         <div
-          className="relative inline-block w-11 h-6 cursor-pointer"
+          className={`relative inline-block w-11 h-6 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           onClick={handleToggle}
         >
           <input
             type="checkbox"
             checked={isOn}
             readOnly
+            disabled={disabled}
             className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-transparent appearance-none cursor-pointer hidden"
           />
           <label
-            className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors duration-200 ${
+            className={`toggle-label block overflow-hidden h-6 rounded-full transition-colors duration-200 ${
+              disabled ? 'cursor-not-allowed' : 'cursor-pointer'
+            } ${
               isOn ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'
             } ${toggling ? 'opacity-50' : ''}`}
           >
