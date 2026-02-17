@@ -31,10 +31,28 @@ async def get_all_users(current_user: User = Depends(auth_service.require_team_l
     return UserListResponse(users=user_responses, total=len(user_responses))
 
 # ===========================
+# Get Current User Profile
+# ===========================
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(auth_service.get_current_user)):
+    """
+    Get current authenticated user's profile
+    """
+    return UserResponse(
+        id=current_user.id,
+        name=current_user.name,
+        email=current_user.email,
+        role=current_user.role,
+        team=current_user.team,
+        is_active=current_user.is_active
+    )
+
+# ===========================
 # Admin Create User
 # ===========================
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/create", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def admin_create_user(
     user_data: UserCreate,
     current_user: User = Depends(auth_service.require_admin)
@@ -108,10 +126,10 @@ async def get_team_users(current_user: User = Depends(auth_service.require_team_
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str, current_user: User = Depends(auth_service.get_current_user)):
     """
-    Get user by ID - User can view own profile, admin can view any
+    Get user by ID - User can view own profile, Team Lead and Admin can view any
     """
     # Check permissions
-    if current_user.id != user_id and current_user.role != UserRole.ADMIN:
+    if current_user.id != user_id and current_user.role not in [UserRole.TEAM_LEAD, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view this user"
@@ -204,21 +222,3 @@ async def deactivate_user(
     storage.update_user(user)
     
     return {"message": f"User {user.name} has been deactivated"}
-
-# ===========================
-# Get Current User Profile
-# ===========================
-
-@router.get("/profile/me", response_model=UserResponse)
-async def get_profile(current_user: User = Depends(auth_service.get_current_user)):
-    """
-    Get current user's own profile information
-    """
-    return UserResponse(
-        id=current_user.id,
-        name=current_user.name,
-        email=current_user.email,
-        role=current_user.role,
-        team=current_user.team,
-        is_active=current_user.is_active
-    )

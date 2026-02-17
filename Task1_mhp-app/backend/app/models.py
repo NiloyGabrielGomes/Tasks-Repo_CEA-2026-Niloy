@@ -68,13 +68,22 @@ class MealParticipation(BaseModel):
             }
         }
 
+# Meals that employees are opted-in for by default.
+# Iftar is NOT a default meal — it requires admin configuration to enable.
+DEFAULT_OPTED_IN_MEALS = {
+    MealType.LUNCH,
+    MealType.SNACKS,
+    MealType.EVENT_DINNER,
+    MealType.OPTIONAL_DINNER,
+}
+
 def create_default_participation(user_id: str, target_date: date) -> list[MealParticipation]:
     return [
         MealParticipation(
             user_id=user_id,
             meal_type=meal_type,
             date=target_date,
-            is_participating=True,
+            is_participating=(meal_type in DEFAULT_OPTED_IN_MEALS),
             updated_by=None,
             updated_at=datetime.now()
         )

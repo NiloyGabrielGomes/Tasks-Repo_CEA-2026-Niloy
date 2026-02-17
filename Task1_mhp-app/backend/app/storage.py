@@ -7,7 +7,7 @@ from app.models import User, MealParticipation, MealType, create_default_partici
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 USERS_FILE = DATA_DIR / "users.json"
-PARTICIPATION_FILE = DATA_DIR / "participation.json"
+PARTICIPATION_FILE = DATA_DIR / "meal_participation.json"
 
 DATA_DIR.mkdir(exist_ok=True)
 
