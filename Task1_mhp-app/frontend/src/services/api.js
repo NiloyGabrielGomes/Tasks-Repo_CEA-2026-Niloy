@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -47,7 +47,8 @@ export const authAPI = {
   register: (name, email, password, team) =>
     api.post('/api/auth/register', { name, email, password, team }),
 
-  getMe: () => api.get('/api/auth/me'),
+  // Kept for backwards compat but prefer usersAPI.getMe
+  getMe: () => api.get('/api/users/me'),
 };
 
 // ===========================
@@ -64,6 +65,13 @@ export const mealsAPI = {
 
   updateParticipation: (userId, targetDate, mealType, isParticipating) =>
     api.put(`/api/meals/${userId}/${targetDate}/${mealType}`, {
+      is_participating: isParticipating,
+    }),
+
+  adminUpdateParticipation: (userId, mealType, isParticipating) =>
+    api.post('/api/meals/participation/admin', {
+      user_id: userId,
+      meal_type: mealType,
       is_participating: isParticipating,
     }),
 
@@ -86,13 +94,17 @@ export const mealsAPI = {
 export const usersAPI = {
   getAllUsers: () => api.get('/api/users'),
 
+  getMe: () => api.get('/api/users/me'),
+
   getTeamUsers: () => api.get('/api/users/team'),
 
   getUser: (userId) => api.get(`/api/users/${userId}`),
 
+  createUser: (data) => api.post('/api/users/create', data),
+
   updateUser: (userId, data) => api.put(`/api/users/${userId}`, data),
 
-  getProfile: () => api.get('/api/users/profile/me'),
+  deactivateUser: (userId) => api.delete(`/api/users/${userId}`),
 };
 
 export default api;
