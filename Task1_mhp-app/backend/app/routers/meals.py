@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Query, Depends
 from datetime import date, datetime
 from pydantic import BaseModel
 from typing import Dict, List
-from app.models import User, MealType, MealParticipation, UserRole
+from app.models import User, MealType, MealParticipation, UserRole, CUTOFF_HOUR, ADMIN_CONTROLLED_MEALS
 from app import auth as auth_service
 from app import storage
 
@@ -24,6 +24,7 @@ class MealParticipationResponse(BaseModel):
 class UserMealsResponse(BaseModel):
     date: str
     meals: List[MealParticipationResponse]
+    cutoff_passed: bool = False
 
 class HeadcountResponse(BaseModel):
     date: str
@@ -38,6 +39,64 @@ class AdminParticipationOverrideRequest(BaseModel):
     meal_type: str
     is_participating: bool
 
+class MealConfigResponse(BaseModel):
+    enabled_meals: Dict[str, bool]
+
+class MealConfigUpdateRequest(BaseModel):
+    meal_type: str
+    enabled: bool
+
+# ===========================
+# Helpers
+# ===========================
+
+def _is_cutoff_passed() -> bool:
+    """Check if the current time is past the cutoff hour (9 PM)."""
+    return datetime.now().hour >= CUTOFF_HOUR
+
+# ===========================
+# Meal Configuration (Admin only)
+# ===========================
+
+@router.get("/config", response_model=MealConfigResponse)
+async def get_meal_config(
+    current_user: User = Depends(auth_service.get_current_user)
+):
+    """
+    Get which meal types are currently enabled.
+    All authenticated users can view this.
+    """
+    config = storage.get_enabled_meals()
+    return MealConfigResponse(enabled_meals=config)
+
+@router.put("/config", response_model=MealConfigResponse)
+async def update_meal_config(
+    request: MealConfigUpdateRequest,
+    current_user: User = Depends(auth_service.require_admin)
+):
+    """
+    Enable or disable a meal type. Admin only.
+    Only admin-controlled meals (iftar, event_dinner) can be toggled.
+    """
+    # Validate meal type
+    try:
+        meal_enum = MealType(request.meal_type)
+    except ValueError:
+        valid_meals = ", ".join([m.value for m in MealType])
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid meal type. Valid options: {valid_meals}"
+        )
+    
+    if meal_enum not in ADMIN_CONTROLLED_MEALS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{request.meal_type} is always enabled and cannot be toggled"
+        )
+    
+    config = storage.set_meal_enabled(request.meal_type, request.enabled)
+    return MealConfigResponse(enabled_meals=config)
+
 # ===========================
 # Get User's Meal Participation for Today/Date
 # ===========================
@@ -49,6 +108,7 @@ async def get_today_meals(current_user: User = Depends(auth_service.get_current_
     """
     today = date.today()
     participation = storage.get_user_participation(current_user.id, today)
+    enabled = storage.get_enabled_meal_types()
     
     meals = [
         MealParticipationResponse(
@@ -61,11 +121,13 @@ async def get_today_meals(current_user: User = Depends(auth_service.get_current_
             updated_at=record.updated_at.isoformat()
         )
         for record in participation
+        if record.meal_type.value in enabled
     ]
     
     return UserMealsResponse(
         date=today.isoformat(),
-        meals=meals
+        meals=meals,
+        cutoff_passed=_is_cutoff_passed()
     )
 
 # ===========================
@@ -99,6 +161,9 @@ async def get_user_meals(
     
     participation = storage.get_user_participation(user_id, target_date)
     
+    # Filter to only enabled meals
+    enabled_types = storage.get_enabled_meal_types()
+    
     meals = [
         MealParticipationResponse(
             id=record.id,
@@ -110,11 +175,13 @@ async def get_user_meals(
             updated_at=record.updated_at.isoformat()
         )
         for record in participation
+        if record.meal_type in enabled_types
     ]
     
     return UserMealsResponse(
         date=target_date.isoformat(),
-        meals=meals
+        meals=meals,
+        cutoff_passed=_is_cutoff_passed()
     )
 
 # ===========================
@@ -132,12 +199,20 @@ async def update_meal_participation(
     """
     Update meal participation for a user
     User can update own meals, Team Leads/Admin can update for others
+    Employees are blocked after 9 PM cutoff; Admin/TL are exempt.
     """
     # Check permissions
     if current_user.id != user_id and current_user.role not in [UserRole.TEAM_LEAD, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to update this user's meals"
+        )
+    
+    # Enforce cutoff for regular employees (not admin/TL)
+    if current_user.role == UserRole.EMPLOYEE and target_date == date.today() and _is_cutoff_passed():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Meal participation changes are locked after 9:00 PM. You can update again tomorrow morning."
         )
     
     # Verify user exists
@@ -156,6 +231,14 @@ async def update_meal_participation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid meal type. Valid options: {valid_meals}"
+        )
+    
+    # Verify the meal type is currently enabled
+    enabled_types = storage.get_enabled_meal_types()
+    if meal_enum not in enabled_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The meal type '{meal_type}' is not currently enabled"
         )
     
     # Update participation
@@ -216,6 +299,14 @@ async def admin_update_participation(
             detail=f"Invalid meal type. Valid options: {valid_meals}"
         )
     
+    # Verify the meal type is currently enabled
+    enabled_types = storage.get_enabled_meal_types()
+    if meal_enum not in enabled_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The meal type '{request.meal_type}' is not currently enabled"
+        )
+    
     today = date.today()
     
     # Update participation with audit trail (updated_by = admin/TL id)
@@ -250,6 +341,8 @@ async def get_team_headcount_today(
     """
     today = date.today()
     headcount = storage.get_headcount_by_date_and_team(today, current_user.team)
+    enabled_types = storage.get_enabled_meal_types()
+    headcount = {k: v for k, v in headcount.items() if MealType(k) in enabled_types}
     team_users = storage.get_users_by_team(current_user.team)
     total_active = len([u for u in team_users if u.is_active])
     
@@ -272,6 +365,8 @@ async def get_team_headcount(
     Get headcount for the team lead's team for a specific date
     """
     headcount = storage.get_headcount_by_date_and_team(target_date, current_user.team)
+    enabled_types = storage.get_enabled_meal_types()
+    headcount = {k: v for k, v in headcount.items() if MealType(k) in enabled_types}
     team_users = storage.get_users_by_team(current_user.team)
     total_active = len([u for u in team_users if u.is_active])
     
@@ -295,6 +390,8 @@ async def get_today_headcount(
     """
     today = date.today()
     headcount = storage.get_headcount_by_date(today)
+    enabled_types = storage.get_enabled_meal_types()
+    headcount = {k: v for k, v in headcount.items() if MealType(k) in enabled_types}
     all_users = storage.get_all_users()
     total_active = len([u for u in all_users if u.is_active])
     
@@ -318,6 +415,8 @@ async def get_headcount(
     Team Leads and Admin only
     """
     headcount = storage.get_headcount_by_date(target_date)
+    enabled_types = storage.get_enabled_meal_types()
+    headcount = {k: v for k, v in headcount.items() if MealType(k) in enabled_types}
     all_users = storage.get_all_users()
     total_active = len([u for u in all_users if u.is_active])
     

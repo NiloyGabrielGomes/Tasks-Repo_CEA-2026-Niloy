@@ -3,11 +3,12 @@ import os
 from datetime import date, datetime
 from typing import Optional, Dict, List
 from pathlib import Path
-from app.models import User, MealParticipation, MealType, create_default_participation
+from app.models import User, MealParticipation, MealType, create_default_participation, ADMIN_CONTROLLED_MEALS
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 USERS_FILE = DATA_DIR / "users.json"
 PARTICIPATION_FILE = DATA_DIR / "meal_participation.json"
+MEAL_CONFIG_FILE = DATA_DIR / "meal_config.json"
 
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -209,6 +210,47 @@ def initialize_daily_participation(target_date: date) -> None:
 
         existing = get_user_participation(user.id, target_date)
         pass # If no records exist, they'll be created by get_user_participation
+
+# ===========================
+# Meal Configuration (Admin-controlled meal types)
+# ===========================
+
+def _load_meal_config() -> Dict[str, bool]:
+    """Load meal config. Returns dict of meal_type -> enabled."""
+    if not MEAL_CONFIG_FILE.exists():
+        # By default, admin-controlled meals are disabled
+        default = {}
+        for mt in MealType:
+            default[mt.value] = mt not in ADMIN_CONTROLLED_MEALS
+        return default
+    try:
+        with open(MEAL_CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("enabled_meals", {})
+    except json.JSONDecodeError:
+        default = {}
+        for mt in MealType:
+            default[mt.value] = mt not in ADMIN_CONTROLLED_MEALS
+        return default
+
+def _save_meal_config(config: Dict[str, bool]) -> None:
+    _save_json(MEAL_CONFIG_FILE, {"enabled_meals": config})
+
+def get_enabled_meals() -> Dict[str, bool]:
+    """Get which meal types are currently enabled."""
+    return _load_meal_config()
+
+def set_meal_enabled(meal_type: str, enabled: bool) -> Dict[str, bool]:
+    """Enable or disable a meal type. Returns updated config."""
+    config = _load_meal_config()
+    config[meal_type] = enabled
+    _save_meal_config(config)
+    return config
+
+def get_enabled_meal_types() -> List[str]:
+    """Get list of meal type values that are currently enabled."""
+    config = _load_meal_config()
+    return [mt for mt, enabled in config.items() if enabled]
 
 # ===========================
 # Initialization and Seeding
