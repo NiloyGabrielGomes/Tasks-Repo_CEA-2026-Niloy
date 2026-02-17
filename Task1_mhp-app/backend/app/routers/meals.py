@@ -1,50 +1,19 @@
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from datetime import date, datetime
-from pydantic import BaseModel
-from typing import Dict, List
 from app.models import User, MealType, MealParticipation, UserRole, CUTOFF_HOUR, ADMIN_CONTROLLED_MEALS
+from app.schemas import (
+    MealParticipationResponse,
+    UserMealsResponse,
+    HeadcountResponse,
+    UpdateParticipationRequest,
+    AdminParticipationOverrideRequest,
+    MealConfigResponse,
+    MealConfigUpdateRequest,
+)
 from app import auth as auth_service
 from app import storage
 
 router = APIRouter()
-
-# ===========================
-# Response Models
-# ===========================
-
-class MealParticipationResponse(BaseModel):
-    id: str
-    user_id: str
-    meal_type: str
-    date: str
-    is_participating: bool
-    updated_by: str | None = None
-    updated_at: str
-
-class UserMealsResponse(BaseModel):
-    date: str
-    meals: List[MealParticipationResponse]
-    cutoff_passed: bool = False
-
-class HeadcountResponse(BaseModel):
-    date: str
-    headcount: Dict[str, int]
-    total_employees: int = 0
-
-class UpdateParticipationRequest(BaseModel):
-    is_participating: bool
-
-class AdminParticipationOverrideRequest(BaseModel):
-    user_id: str
-    meal_type: str
-    is_participating: bool
-
-class MealConfigResponse(BaseModel):
-    enabled_meals: Dict[str, bool]
-
-class MealConfigUpdateRequest(BaseModel):
-    meal_type: str
-    enabled: bool
 
 # ===========================
 # Helpers
