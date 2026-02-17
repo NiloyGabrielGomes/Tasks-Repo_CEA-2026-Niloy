@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [team, setTeam] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,6 +40,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -185,6 +192,31 @@ export default function RegisterPage() {
               )}
             </div>
 
+            {/* Confirm Password */}
+            <div>
+              <label
+                htmlFor="confirm-password"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+              >
+                Confirm Password
+              </label>
+              <input
+                id="confirm-password"
+                type="password"
+                required
+                minLength={6}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all duration-200 dark:text-white"
+              />
+              {confirmPassword.length > 0 && password !== confirmPassword && (
+                <p className="text-[11px] mt-1.5 text-red-500">
+                  Passwords do not match
+                </p>
+              )}
+            </div>
+
             {/* Submit */}
             <button
               type="submit"
@@ -209,7 +241,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Background accents */}
-      <div className="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-orange-400 to-primary"></div>
+      <div className="fixed top-0 left-0 w-full h-1 bg-linear-to-r from-primary via-orange-400 to-primary"></div>
       <div className="fixed -bottom-24 -left-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
       <div className="fixed -top-24 -right-24 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none"></div>
     </div>
