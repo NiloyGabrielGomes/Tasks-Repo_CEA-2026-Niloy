@@ -74,7 +74,7 @@ export default function AdminDashboard() {
   const fetchMealConfig = async () => {
     try {
       const res = await mealsAPI.getMealConfig();
-      setMealConfig(res.data.meals);
+      setMealConfig(res.data.enabled_meals);
     } catch (err) {
       // Non-critical, just log
       console.error('Failed to load meal config:', err);
