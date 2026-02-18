@@ -1064,6 +1064,7 @@ FastAPI features to be used:
 Initialize a React app with Vite and install dependencies using react-router-dom, axios. Create
 API service layer in services/api.js. Set up the auth context for global user state.
 Pages/Views:
+```
 ● LoginPage.jsx - Login form
 ● EmployeeDashboard.jsx
 ○ Today's date display
@@ -1083,6 +1084,7 @@ Pages/Views:
 ○ Team participation overview for the day
 ○ Bulk action controls (opt-out group of team members)
 ○ Correct missing work-location entries for team members
+```
 Components:
 
 1. PrivateRoute.jsx - Protected route wrapper
