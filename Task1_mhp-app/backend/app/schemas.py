@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
-from app.models import UserRole, MealType, WorkLocationType
+from app.models import UserRole, MealType, WorkLocationType, DayType
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -562,5 +562,67 @@ class TeamParticipationResponse(BaseModel):
                     }
                 ],
                 "total_members": 1
+            }
+        }
+
+# ===========================
+# Special Day Schemas
+# ===========================
+
+class SpecialDayCreate(BaseModel):
+    #Request to create a special day.
+    date: date
+    day_type: DayType
+    note: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-03-26",
+                "day_type": "governmentholiday",
+                "note": "Independence Day"
+            }
+        }
+
+
+class SpecialDayResponse(BaseModel):
+    id: str
+    date: str
+    day_type: str
+    note: Optional[str] = None
+    created_by: str
+    created_at: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "sd-001",
+                "date": "2026-03-26",
+                "day_type": "governmentholiday",
+                "note": "Independence Day",
+                "created_by": "admin-user-id",
+                "created_at": "2026-02-19T10:30:00"
+            }
+        }
+
+
+class SpecialDayListResponse(BaseModel):
+    special_days: List[SpecialDayResponse]
+    total: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "special_days": [
+                    {
+                        "id": "sd-001",
+                        "date": "2026-03-26",
+                        "day_type": "governmentholiday",
+                        "note": "Independence Day",
+                        "created_by": "admin-user-id",
+                        "created_at": "2026-02-19T10:30:00"
+                    }
+                ],
+                "total": 1
             }
         }
