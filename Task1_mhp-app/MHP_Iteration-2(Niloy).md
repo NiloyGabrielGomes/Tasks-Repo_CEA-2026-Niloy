@@ -295,7 +295,8 @@ The organization currently uses a manual Excel-based process to track daily meal
           │  │   ├─ users.py            │  │                 
           │  │   ├─ teams.py            │  │  ← Iteration 2  
           │  │   ├─ special_days.py     │  │  ← Iteration 2  
-          │  │   ├─ work_locations.py   │  │  ← Iteration 2  
+          │  │   ├─ work_locations.py   │  │  ← Iteration 2
+          │  │   ├─ sse.py              │  │  ← Iteration 2  
           │  │   └─ announcements.py    │  │  ← Iteration 2  
           │  └──────────────────────────┘  │                 
           │  ┌──────────────────────────┐  │                 
