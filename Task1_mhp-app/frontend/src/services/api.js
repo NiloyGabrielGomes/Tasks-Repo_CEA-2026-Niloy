@@ -116,4 +116,58 @@ export const usersAPI = {
   deactivateUser: (userId) => api.delete(`/api/users/${userId}`),
 };
 
+// ===========================
+// Teams API
+// ===========================
+
+export const teamsAPI = {
+  getTeams: () => api.get('/api/teams'),
+
+  getMyTeamParticipation: (targetDate) =>
+    api.get('/api/teams/me', { params: { target_date: targetDate } }),
+
+  getAllTeamParticipation: (targetDate) =>
+    api.get('/api/teams/all', { params: { target_date: targetDate } }),
+
+  getTeamParticipation: (teamName, targetDate) =>
+    api.get(`/api/teams/${encodeURIComponent(teamName)}`, {
+      params: { target_date: targetDate },
+    }),
+};
+
+// ===========================
+// Work Locations API
+// ===========================
+
+export const workLocationsAPI = {
+  set: (targetDate, location) =>
+    api.put('/api/work-locations', { date: targetDate, location }),
+
+  getMine: (targetDate) =>
+    api.get('/api/work-locations/me', { params: { target_date: targetDate } }),
+
+  getByDate: (targetDate) =>
+    api.get('/api/work-locations/date', { params: { target_date: targetDate } }),
+
+  adminSet: (userId, targetDate, location) =>
+    api.put('/api/work-locations/admin', {
+      user_id: userId,
+      date: targetDate,
+      location,
+    }),
+};
+
+// ===========================
+// SSE Helpers
+// ===========================
+
+export const sseAPI = {
+  getStreamUrl: (date = null) => {
+    const token = localStorage.getItem('access_token');
+    let url = `${API_BASE_URL}/api/stream/headcount?token=${encodeURIComponent(token)}`;
+    if (date) url += `&date=${encodeURIComponent(date)}`;
+    return url;
+  },
+};
+
 export default api;
