@@ -75,6 +75,10 @@ export const mealsAPI = {
       is_participating: isParticipating,
     }),
 
+ 
+  batchAdminUpdateParticipation: (updates) =>
+    api.post('/api/meals/participation/admin/batch', { updates }),
+
   getTodayHeadcount: () => api.get('/api/meals/headcount/today'),
 
   getHeadcount: (targetDate) =>
