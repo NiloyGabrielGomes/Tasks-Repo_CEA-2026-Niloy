@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
-from app.routers import auth, users, meals
+from app.routers import auth, users, meals, sse, teams, work_locations
 from app import storage
 
 load_dotenv()
@@ -44,6 +44,9 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(meals.router, prefix="/api/meals", tags=["Meals"])
+app.include_router(sse.router)
+app.include_router(teams.router)
+app.include_router(work_locations.router)
 
 # ===========================
 # Health Check Endpoint
@@ -135,25 +138,44 @@ async def shutdown_event():
 async def api_info():
     return{
         "name": "Meal Headcount Planner API",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "endpoints": {
             "authentication": {
                 "login": "POST /api/auth/login",
-                "register": "POST /api/users/register"
+                "register": "POST /api/auth/register"
             },
             "users": {
                 "me": "GET /api/users/me",
                 "create": "POST /api/users/create (Admin)",
                 "list": "GET /api/users (Admin)",
+                "team": "GET /api/users/team (TeamLead/Admin)",
                 "get": "GET /api/users/{user_id} (TeamLead/Admin)",
                 "update": "PUT /api/users/{user_id} (Admin)",
                 "delete": "DELETE /api/users/{user_id} (Admin)"
             },
             "meals": {
                 "today": "GET /api/meals/today",
-                "update": "PUT /api/meals/participation",
+                "update": "PUT /api/meals/{user_id}/{date}/{meal_type}",
                 "admin_update": "POST /api/meals/participation/admin (TeamLead/Admin)",
-                "headcount": "GET /api/meals/headcount/today (Admin)"
+                "batch_update": "POST /api/meals/participation/admin/batch (TeamLead/Admin)",
+                "headcount_today": "GET /api/meals/headcount/today (TeamLead/Admin)",
+                "headcount_date": "GET /api/meals/headcount/{date} (TeamLead/Admin)",
+                "team_headcount": "GET /api/meals/headcount/team/today (TeamLead/Admin)"
+            },
+            "teams": {
+                "list": "GET /api/teams",
+                "my_team": "GET /api/teams/me (TeamLead/Admin)",
+                "all_teams": "GET /api/teams/all (Admin)",
+                "by_name": "GET /api/teams/{team_name} (TeamLead/Admin)"
+            },
+            "work_locations": {
+                "set": "PUT /api/work-locations",
+                "get_mine": "GET /api/work-locations/me",
+                "get_by_date": "GET /api/work-locations/date (TeamLead/Admin)",
+                "admin_set": "PUT /api/work-locations/admin (TeamLead/Admin)"
+            },
+            "sse": {
+                "headcount_stream": "GET /api/stream/headcount?token=JWT"
             }
         }
     }
