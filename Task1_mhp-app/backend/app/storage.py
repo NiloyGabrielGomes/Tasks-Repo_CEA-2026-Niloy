@@ -3,13 +3,14 @@ import os
 from datetime import date, datetime
 from typing import Optional, Dict, List
 from pathlib import Path
-from app.models import User, MealParticipation, MealType, WorkLocation, WorkLocationType, create_default_participation, ADMIN_CONTROLLED_MEALS
+from app.models import User, MealParticipation, MealType, WorkLocation, WorkLocationType, SpecialDay, DayType, create_default_participation, ADMIN_CONTROLLED_MEALS
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 USERS_FILE = DATA_DIR / "users.json"
 PARTICIPATION_FILE = DATA_DIR / "meal_participation.json"
 MEAL_CONFIG_FILE = DATA_DIR / "meal_config.json"
 WORK_LOCATIONS_FILE = DATA_DIR / "work_locations.json"
+SPECIAL_DAYS_FILE = DATA_DIR / "special_days.json"
 
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -384,6 +385,98 @@ def get_enabled_meal_types() -> List[str]:
     config = _load_meal_config()
     return [mt for mt, enabled in config.items() if enabled]
 
+
+# ===========================
+# Special Day Operations
+# ===========================
+
+def _load_special_days() -> List[dict]:
+    data = _load_json(SPECIAL_DAYS_FILE)
+    return data.get("special_days", [])
+
+
+def _save_special_days(days: List[dict]) -> None:
+    _save_json(SPECIAL_DAYS_FILE, {"special_days": days})
+
+
+def create_special_day(special_day: SpecialDay) -> SpecialDay:
+    days = _load_special_days()
+
+    # Check for duplicate date
+    for d in days:
+        d_date = d.get("date")
+        if isinstance(d_date, str):
+            d_date = datetime.fromisoformat(d_date).date() if "T" in d_date else date.fromisoformat(d_date)
+        sd_date = special_day.date
+        if isinstance(sd_date, str):
+            sd_date = date.fromisoformat(sd_date)
+        if d_date == sd_date:
+            raise ValueError(f"A special day already exists for {special_day.date}")
+
+    days.append(special_day.model_dump(mode="json"))
+    _save_special_days(days)
+    return special_day
+
+
+def get_special_day_by_date(target_date: date) -> Optional[SpecialDay]:
+    days = _load_special_days()
+    for d in days:
+        d_date = d.get("date")
+        if isinstance(d_date, str):
+            d_date = datetime.fromisoformat(d_date).date() if "T" in d_date else date.fromisoformat(d_date)
+        if d_date == target_date:
+            d["date"] = d_date
+            if isinstance(d.get("created_at"), str):
+                d["created_at"] = datetime.fromisoformat(d["created_at"])
+            return SpecialDay(**d)
+    return None
+
+
+def get_special_days_range(start_date: date, end_date: date) -> List[SpecialDay]:
+    days = _load_special_days()
+    results = []
+    for d in days:
+        d_date = d.get("date")
+        if isinstance(d_date, str):
+            d_date = datetime.fromisoformat(d_date).date() if "T" in d_date else date.fromisoformat(d_date)
+        if start_date <= d_date <= end_date:
+            d["date"] = d_date
+            if isinstance(d.get("created_at"), str):
+                d["created_at"] = datetime.fromisoformat(d["created_at"])
+            results.append(SpecialDay(**d))
+    return results
+
+
+def delete_special_day(special_day_id: str) -> bool:
+    days = _load_special_days()
+    original_len = len(days)
+    days = [d for d in days if d.get("id") != special_day_id]
+    if len(days) == original_len:
+        return False
+    _save_special_days(days)
+    return True
+
+
+def is_participation_blocked(target_date: date) -> tuple[bool, str | None]:
+    sd = get_special_day_by_date(target_date)
+    if sd is None:
+        return False, None
+
+    day_type = sd.day_type
+    if isinstance(day_type, str):
+        day_type_val = day_type
+    else:
+        day_type_val = day_type.value if hasattr(day_type, "value") else str(day_type)
+
+    if day_type_val in (DayType.OFFICE_CLOSED.value, DayType.GOVERNMENT_HOLIDAY.value):
+        label = "Office Closed" if day_type_val == DayType.OFFICE_CLOSED.value else "Government Holiday"
+        reason = f"Meal participation is not available: {label}"
+        if sd.note:
+            reason += f" — {sd.note}"
+        return True, reason
+
+    return False, None
+
 # ===========================
 # Initialization and Seeding
 # ===========================
@@ -430,6 +523,10 @@ def seed_initial_data() -> None:
     initialize_daily_participation(today)
     print(f"Initialized participation for {today}")
     
+    if not SPECIAL_DAYS_FILE.exists():
+        _save_json(SPECIAL_DAYS_FILE, {"special_days": []})
+        print("Initialized special_days.json")
+
     print("Seed data created successfully!")
 
 
