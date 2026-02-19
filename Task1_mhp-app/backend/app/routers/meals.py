@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from datetime import date, datetime
 from app.models import User, MealType, MealParticipation, UserRole, CUTOFF_HOUR, ADMIN_CONTROLLED_MEALS
+from app.auth import require_role
 from app.schemas import (
     MealParticipationResponse,
     UserMealsResponse,
@@ -9,6 +10,8 @@ from app.schemas import (
     AdminParticipationOverrideRequest,
     MealConfigResponse,
     MealConfigUpdateRequest,
+    BatchParticipationRequest,
+    BatchParticipationResponse,
 )
 from app import auth as auth_service
 from app import storage
@@ -41,7 +44,7 @@ async def get_meal_config(
 @router.put("/config", response_model=MealConfigResponse)
 async def update_meal_config(
     request: MealConfigUpdateRequest,
-    current_user: User = Depends(auth_service.require_admin)
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
     """
     Enable or disable a meal type. Admin only.
@@ -236,7 +239,7 @@ async def update_meal_participation(
 @router.post("/participation/admin", response_model=MealParticipationResponse)
 async def admin_update_participation(
     request: AdminParticipationOverrideRequest,
-    current_user: User = Depends(auth_service.require_team_lead)
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))
 ):
     """
     Team Lead or Admin updates participation on behalf of an employee.
@@ -298,12 +301,82 @@ async def admin_update_participation(
     )
 
 # ===========================
+# Batch Admin/Team Lead Override Participation
+# ===========================
+
+@router.post("/participation/admin/batch", response_model=BatchParticipationResponse)
+async def batch_admin_update_participation(
+    payload: BatchParticipationRequest,
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN])),
+):
+    """
+    Accept multiple participation updates in a single request.
+    Replaces the pattern of calling POST /participation/admin once per meal type.
+    Team Leads can only update users in their own team.
+    """
+    results = []
+    succeeded = 0
+    failed = 0
+    today = date.today()
+    enabled_types = storage.get_enabled_meal_types()
+
+    for item in payload.updates:
+        try:
+            target_user = storage.get_user_by_id(item.user_id)
+            if not target_user:
+                raise ValueError("User not found")
+
+            if current_user.role == UserRole.TEAM_LEAD and current_user.team != target_user.team:
+                raise ValueError("Can only update users in your team")
+
+            try:
+                meal_enum = MealType(item.meal_type)
+            except ValueError:
+                valid_meals = ", ".join([m.value for m in MealType])
+                raise ValueError(f"Invalid meal type. Valid options: {valid_meals}")
+
+            if meal_enum not in enabled_types:
+                raise ValueError(f"The meal type '{item.meal_type}' is not currently enabled")
+
+            storage.update_participation(
+                user_id=item.user_id,
+                target_date=today,
+                meal_type=meal_enum,
+                is_participating=item.is_participating,
+                updated_by=current_user.id,
+            )
+
+            results.append({
+                "user_id": item.user_id,
+                "meal_type": item.meal_type,
+                "success": True,
+                "message": "Updated",
+            })
+            succeeded += 1
+
+        except Exception as exc:
+            results.append({
+                "user_id": item.user_id,
+                "meal_type": item.meal_type,
+                "success": False,
+                "message": str(exc),
+            })
+            failed += 1
+
+    return BatchParticipationResponse(
+        total=len(payload.updates),
+        succeeded=succeeded,
+        failed=failed,
+        results=results,
+    )
+
+# ===========================
 # Get Team Headcount for Today
 # ===========================
 
 @router.get("/headcount/team/today", response_model=HeadcountResponse)
 async def get_team_headcount_today(
-    current_user: User = Depends(auth_service.require_team_lead)
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))
 ):
     """
     Get headcount for the team lead's team for today
@@ -328,7 +401,7 @@ async def get_team_headcount_today(
 @router.get("/headcount/team/{target_date}", response_model=HeadcountResponse)
 async def get_team_headcount(
     target_date: date,
-    current_user: User = Depends(auth_service.require_team_lead)
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))
 ):
     """
     Get headcount for the team lead's team for a specific date
@@ -351,7 +424,7 @@ async def get_team_headcount(
 
 @router.get("/headcount/today", response_model=HeadcountResponse)
 async def get_today_headcount(
-    current_user: User = Depends(auth_service.require_team_lead)
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))
 ):
     """
     Get headcount totals for each meal type for today
@@ -377,7 +450,7 @@ async def get_today_headcount(
 @router.get("/headcount/{target_date}", response_model=HeadcountResponse)
 async def get_headcount(
     target_date: date,
-    current_user: User = Depends(auth_service.require_team_lead)
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))
 ):
     """
     Get headcount totals for each meal type on a specific date

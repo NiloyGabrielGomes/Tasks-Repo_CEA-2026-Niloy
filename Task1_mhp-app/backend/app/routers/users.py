@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from app.schemas import UserResponse, UserListResponse, UserUpdate, UserCreate
 from app.models import User, UserRole
 from app import auth as auth_service
+from app.auth import require_role
 from app import storage
 
 router = APIRouter()
@@ -11,7 +12,7 @@ router = APIRouter()
 # ===========================
 
 @router.get("", response_model=UserListResponse)
-async def get_all_users(current_user: User = Depends(auth_service.require_team_lead)):
+async def get_all_users(current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))):
     """
     Get list of all users - Team Lead and Admin
     """
@@ -55,7 +56,7 @@ async def get_me(current_user: User = Depends(auth_service.get_current_user)):
 @router.post("/create", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def admin_create_user(
     user_data: UserCreate,
-    current_user: User = Depends(auth_service.require_admin)
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
     """
     Create a new user with any role - Admin only
@@ -100,7 +101,7 @@ async def admin_create_user(
 # ===========================
 
 @router.get("/team", response_model=UserListResponse)
-async def get_team_users(current_user: User = Depends(auth_service.require_team_lead)):
+async def get_team_users(current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))):
     """
     Get list of users in the current user's team - Team Lead and Admin
     """
@@ -159,7 +160,7 @@ async def get_user(user_id: str, current_user: User = Depends(auth_service.get_c
 async def update_user(
     user_id: str,
     update_data: UserUpdate,
-    current_user: User = Depends(auth_service.require_admin)
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
     """
     Update user information - Admin only
@@ -200,7 +201,7 @@ async def update_user(
 @router.delete("/{user_id}")
 async def deactivate_user(
     user_id: str,
-    current_user: User = Depends(auth_service.require_admin)
+    current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
     """
     Soft delete - deactivate a user. Admin only.
