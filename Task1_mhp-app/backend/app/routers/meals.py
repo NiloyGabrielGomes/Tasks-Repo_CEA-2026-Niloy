@@ -15,6 +15,7 @@ from app.schemas import (
 )
 from app import auth as auth_service
 from app import storage
+from app.event_bus import notify_headcount_change
 
 router = APIRouter()
 
@@ -221,6 +222,9 @@ async def update_meal_participation(
         is_participating=request.is_participating,
         updated_by=current_user.id
     )
+
+    # Notify SSE clients of headcount change
+    notify_headcount_change()
     
     return MealParticipationResponse(
         id=updated.id,
@@ -289,6 +293,9 @@ async def admin_update_participation(
         is_participating=request.is_participating,
         updated_by=current_user.id
     )
+
+    # Notify SSE clients of headcount change
+    notify_headcount_change()
     
     return MealParticipationResponse(
         id=updated.id,
@@ -362,6 +369,10 @@ async def batch_admin_update_participation(
                 "message": str(exc),
             })
             failed += 1
+
+    # Notify SSE clients of headcount change (if any succeeded)
+    if succeeded > 0:
+        notify_headcount_change()
 
     return BatchParticipationResponse(
         total=len(payload.updates),
