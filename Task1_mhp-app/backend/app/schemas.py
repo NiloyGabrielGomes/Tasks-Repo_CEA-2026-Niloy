@@ -305,6 +305,68 @@ class AdminParticipationOverrideRequest(BaseModel):
             }
         }
 
+
+# ===========================
+# Batch Participation Schemas
+# ===========================
+
+class BatchParticipationItem(BaseModel):
+    """A single participation change within a batch request."""
+    user_id: str
+    meal_type: str
+    is_participating: bool
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": "user-1",
+                "meal_type": "lunch",
+                "is_participating": False
+            }
+        }
+
+
+class BatchParticipationRequest(BaseModel):
+    """Wraps a list of updates so the frontend can send one request."""
+    updates: List[BatchParticipationItem]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "updates": [
+                    {"user_id": "user-1", "meal_type": "lunch", "is_participating": False},
+                    {"user_id": "user-1", "meal_type": "snacks", "is_participating": False}
+                ]
+            }
+        }
+
+
+class BatchParticipationResultItem(BaseModel):
+    user_id: str
+    meal_type: str
+    success: bool
+    message: str
+
+
+class BatchParticipationResponse(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    results: List[BatchParticipationResultItem]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "total": 2,
+                "succeeded": 2,
+                "failed": 0,
+                "results": [
+                    {"user_id": "user-1", "meal_type": "lunch", "success": True, "message": "Updated"},
+                    {"user_id": "user-1", "meal_type": "snacks", "success": True, "message": "Updated"}
+                ]
+            }
+        }
+
 class AdminParticipationUpdateResponse(BaseModel):
     message: str
     user_name: str

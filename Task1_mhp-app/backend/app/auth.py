@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from app.models import User, UserRole
 from app import storage
+from app.storage import _load_json, _save_json
 
 load_dotenv()
 
@@ -117,28 +118,24 @@ async def get_current_user(
 
 # ===========================
 # Role-Based Access Control Dependencies
+# Consolidated role-based dependency (replace require_* functions with require_role)
 # ===========================
 
-async def require_employee(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+def require_role(allowed_roles: list):
+    async def role_checker(current_user: User = Depends(get_current_user)):
+        if current_user.role not in allowed_roles:
+            allowed = ', '.join(r.value for r in allowed_roles)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required role(s): {allowed}. Your role: {current_user.role.value}",
+            )
+        return current_user
+    return role_checker
 
 
-async def require_team_lead(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in [UserRole.TEAM_LEAD, UserRole.ADMIN]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Team Lead or Admin access required"
-        )
-    return current_user
-
-
-async def require_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
-    return current_user
+require_employee = require_role([UserRole.EMPLOYEE, UserRole.TEAM_LEAD, UserRole.ADMIN])
+require_team_lead = require_role([UserRole.TEAM_LEAD, UserRole.ADMIN])
+require_admin = require_role([UserRole.ADMIN])
 
 
 # ===========================
