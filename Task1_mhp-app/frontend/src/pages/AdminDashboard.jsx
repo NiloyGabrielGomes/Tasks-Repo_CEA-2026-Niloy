@@ -198,11 +198,18 @@ export default function AdminDashboard() {
 
   const handleAdminToggleMeal = async (meal, newValue) => {
     try {
-      await mealsAPI.adminUpdateParticipation(
-        participationUser.id,
-        meal.meal_type,
-        newValue
-      );
+      const res = await mealsAPI.batchAdminUpdateParticipation([
+        {
+          user_id: participationUser.id,
+          meal_type: meal.meal_type,
+          is_participating: newValue,
+        },
+      ]);
+      const failedItems = res.data.results.filter((r) => !r.success);
+      if (failedItems.length > 0) {
+        setError(failedItems.map((f) => f.message).join(', '));
+        return;
+      }
       setParticipationMeals((prev) =>
         prev.map((m) =>
           m.meal_type === meal.meal_type
