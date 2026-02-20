@@ -64,6 +64,7 @@ class MealParticipation(BaseModel):
     is_participating: bool = True
     updated_by: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.now)
+    reason: Optional[str] = None
 
     class Config:
         json_schema_extra = {
@@ -78,8 +79,6 @@ class MealParticipation(BaseModel):
             }
         }
 
-# Meals that employees are opted-in for by default.
-# Iftar and Event Dinner are NOT default meals — they require admin configuration to enable.
 DEFAULT_OPTED_IN_MEALS = {
     MealType.LUNCH,
     MealType.SNACKS,
