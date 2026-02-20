@@ -172,12 +172,13 @@ class MealParticipationResponse(BaseModel):
     id: str
     user_id: str
     meal_type: str
-    date: str
+    date: date
     is_participating: bool
     updated_by: str | None = None
-    updated_at: str
+    updated_at: datetime
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "id": "part-001",
@@ -191,11 +192,12 @@ class MealParticipationResponse(BaseModel):
         }
 
 class UserMealsResponse(BaseModel):
-    date: str
+    date: date
     meals: List[MealParticipationResponse]
     cutoff_passed: bool = False
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2026-02-17",
@@ -220,6 +222,7 @@ class TodayMealsResponse(BaseModel):
     meals: list[MealInfo]
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2023-01-15",
@@ -373,13 +376,13 @@ class BatchParticipationResponse(BaseModel):
 # ===========================
 
 class BulkParticipationRequest(BaseModel):
-    """Bulk-update meals for multiple users on a specific date."""
     user_ids: List[str]
     date: date
     meals: Dict[str, bool]  
     reason: Optional[str] = None
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "user_ids": ["user-1", "user-2"],
@@ -393,9 +396,10 @@ class BulkParticipationRequest(BaseModel):
 class BulkParticipationResponse(BaseModel):
     updated_count: int
     failed: List[Dict[str, str]]
-    date: str
+    date: date
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "updated_count": 4,
@@ -418,6 +422,7 @@ class ExceptionParticipationRequest(BaseModel):
     reason: str
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "user_id": "user-1",
@@ -483,11 +488,12 @@ class MealConfigUpdateRequest(BaseModel):
 # ===========================
 
 class HeadcountResponse(BaseModel):
-    date: str
+    date: date
     headcount: Dict[str, int]
     total_employees: int = 0
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2026-02-06",
@@ -534,11 +540,11 @@ class ErrorResponse(BaseModel):
 # ===========================
 
 class WorkLocationUpdate(BaseModel):
-    """Request to set a user's work location for a date."""
     date: date
     location: WorkLocationType
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2026-02-19",
@@ -554,6 +560,7 @@ class AdminWorkLocationUpdate(BaseModel):
     location: WorkLocationType
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "user_id": "user-1",
@@ -566,12 +573,13 @@ class AdminWorkLocationUpdate(BaseModel):
 class WorkLocationResponse(BaseModel):
     id: str
     user_id: str
-    date: str
+    date: date
     location: str
     updated_by: Optional[str] = None
-    updated_at: str
+    updated_at: datetime
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "id": "wl-001",
@@ -585,7 +593,7 @@ class WorkLocationResponse(BaseModel):
 
 
 class WorkLocationListResponse(BaseModel):
-    date: str
+    date: date
     locations: List[WorkLocationResponse]
     total: int
 
@@ -604,11 +612,12 @@ class TeamMemberParticipation(BaseModel):
 
 class TeamParticipationResponse(BaseModel):
     team: str
-    date: str
+    date: date
     members: List[TeamMemberParticipation]
     total_members: int
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "team": "Engineering",
@@ -637,6 +646,7 @@ class SpecialDayCreate(BaseModel):
     note: Optional[str] = None
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2026-03-26",
@@ -648,13 +658,14 @@ class SpecialDayCreate(BaseModel):
 
 class SpecialDayResponse(BaseModel):
     id: str
-    date: str
+    date: date
     day_type: str
     note: Optional[str] = None
     created_by: str
-    created_at: str
+    created_at: datetime
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "id": "sd-001",
