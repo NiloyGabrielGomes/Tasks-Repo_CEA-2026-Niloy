@@ -94,6 +94,12 @@ export const mealsAPI = {
 
   updateMealConfig: (mealType, enabled) =>
     api.put('/api/meals/config', { meal_type: mealType, enabled }),
+
+  bulkUpdate: (data) =>
+    api.post('/api/meals/participation/bulk', data),
+
+  setException: (data) =>
+    api.post('/api/meals/participation/exception', data),
 };
 
 // ===========================
