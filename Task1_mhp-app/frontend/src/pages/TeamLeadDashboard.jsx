@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
 import SpecialDayBanner from '../components/SpecialDayBanner';
+import BulkActionForm from '../components/BulkActionForm';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -238,6 +239,11 @@ export default function TeamLeadDashboard() {
         {/* Headcount Summary */}
         <div className="mb-10">
           <HeadcountTable headcount={headcount} totalUsers={activeUsers} />
+        </div>
+
+        {/* Bulk Actions */}
+        <div className="mb-10">
+          <BulkActionForm scope="team" team={user?.team} onDone={fetchData} />
         </div>
 
         {/* Team Members */}

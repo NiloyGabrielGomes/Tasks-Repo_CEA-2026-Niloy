@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
 import SpecialDayBanner from '../components/SpecialDayBanner';
 import SpecialDayForm from '../components/SpecialDayForm';
+import BulkActionForm from '../components/BulkActionForm';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -404,6 +405,11 @@ export default function AdminDashboard() {
         {/* Special Days Management */}
         <div className="mb-10">
           <SpecialDayForm onChanged={() => { fetchSpecialDay(); fetchData(); }} />
+        </div>
+
+        {/* Bulk Actions */}
+        <div className="mb-10">
+          <BulkActionForm scope="all" onDone={fetchData} />
         </div>
 
         {/* User Management */}
