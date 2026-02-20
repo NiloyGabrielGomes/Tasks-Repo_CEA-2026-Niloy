@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { mealsAPI, usersAPI } from '../services/api';
+import { mealsAPI, usersAPI, specialDaysAPI } from '../services/api';
 import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
+import SpecialDayBanner from '../components/SpecialDayBanner';
+import SpecialDayForm from '../components/SpecialDayForm';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -62,6 +64,8 @@ export default function AdminDashboard() {
   // Search/filter
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [specialDay, setSpecialDay] = useState(null);
+
   // Meal configuration state
   const [mealConfig, setMealConfig] = useState({});
   const [mealConfigLoading, setMealConfigLoading] = useState(false);
@@ -69,7 +73,17 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchData();
     fetchMealConfig();
+    fetchSpecialDay();
   }, [selectedDate]);
+
+  const fetchSpecialDay = async () => {
+    try {
+      const res = await specialDaysAPI.getByDate(selectedDate);
+      setSpecialDay(res.data);
+    } catch {
+      setSpecialDay(null);
+    }
+  };
 
   const fetchMealConfig = async () => {
     try {
@@ -271,6 +285,9 @@ export default function AdminDashboard() {
         </header>
 
         <ErrorMessage message={error} onDismiss={() => setError('')} />
+
+        <SpecialDayBanner specialDay={specialDay} />
+
         {success && (
           <div className="mb-6 flex items-center p-3.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400 text-sm">
             <span className="material-icons-outlined mr-2 text-lg">check_circle</span>
@@ -383,6 +400,11 @@ export default function AdminDashboard() {
             })}
           </div>
         </section>
+
+        {/* Special Days Management */}
+        <div className="mb-10">
+          <SpecialDayForm onChanged={() => { fetchSpecialDay(); fetchData(); }} />
+        </div>
 
         {/* User Management */}
         <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">

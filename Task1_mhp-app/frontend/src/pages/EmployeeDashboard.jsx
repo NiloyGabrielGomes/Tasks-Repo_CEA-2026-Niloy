@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { mealsAPI } from '../services/api';
+import { mealsAPI, specialDaysAPI } from '../services/api';
 import Navbar from '../components/Navbar';
 import MealCard from '../components/MealCard';
+import SpecialDayBanner from '../components/SpecialDayBanner';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -10,6 +11,7 @@ export default function EmployeeDashboard() {
   const { user } = useAuth();
   const [meals, setMeals] = useState([]);
   const [cutoffPassed, setCutoffPassed] = useState(false);
+  const [specialDay, setSpecialDay] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -28,7 +30,20 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     fetchMeals();
+    fetchSpecialDay();
   }, []);
+
+  const fetchSpecialDay = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await specialDaysAPI.getByDate(today);
+      setSpecialDay(res.data);
+    } catch {
+      setSpecialDay(null);
+    }
+  };
+
+  const isBlocked = specialDay && (specialDay.day_type === 'officeclosed' || specialDay.day_type === 'governmentholiday');
 
   const fetchMeals = async () => {
     setLoading(true);
@@ -93,8 +108,10 @@ export default function EmployeeDashboard() {
 
         <ErrorMessage message={error} onDismiss={() => setError('')} />
 
+        <SpecialDayBanner specialDay={specialDay} />
+
         {/* Cutoff Banner */}
-        {cutoffPassed && (
+        {cutoffPassed && !isBlocked && (
           <div className="mb-6 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-4 flex items-center gap-3">
             <span className="material-icons-outlined text-amber-500">lock_clock</span>
             <p className="text-amber-800 dark:text-amber-200 text-sm font-medium">
@@ -106,7 +123,7 @@ export default function EmployeeDashboard() {
         {/* Meal Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {meals.map((meal) => (
-            <MealCard key={meal.id} meal={meal} onToggle={handleToggle} disabled={cutoffPassed} />
+            <MealCard key={meal.id} meal={meal} onToggle={handleToggle} disabled={cutoffPassed || isBlocked} />
           ))}
         </div>
 

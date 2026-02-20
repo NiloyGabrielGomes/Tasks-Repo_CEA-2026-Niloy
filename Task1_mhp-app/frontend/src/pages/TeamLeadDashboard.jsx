@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { mealsAPI, usersAPI } from '../services/api';
+import { mealsAPI, usersAPI, specialDaysAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
+import SpecialDayBanner from '../components/SpecialDayBanner';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -35,9 +36,22 @@ export default function TeamLeadDashboard() {
   // Search
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Special day
+  const [specialDay, setSpecialDay] = useState(null);
+
   useEffect(() => {
     fetchData();
+    fetchSpecialDay();
   }, [selectedDate]);
+
+  const fetchSpecialDay = async () => {
+    try {
+      const res = await specialDaysAPI.getByDate(selectedDate);
+      setSpecialDay(res.data);
+    } catch {
+      setSpecialDay(null);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -161,6 +175,9 @@ export default function TeamLeadDashboard() {
         </header>
 
         <ErrorMessage message={error} onDismiss={() => setError('')} />
+
+        <SpecialDayBanner specialDay={specialDay} />
+
         {success && (
           <div className="mb-6 flex items-center p-3.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400 text-sm">
             <span className="material-icons-outlined mr-2 text-lg">check_circle</span>
