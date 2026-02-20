@@ -95,10 +95,11 @@ async def get_special_days_range(
         )
 
     days = storage.get_special_days_range(start, end)
+    responses = [_to_response(sd) for sd in days]
 
     return SpecialDayListResponse(
-        special_days=days,
-        total=len(days),
+        special_days=responses,
+        total=len(responses),
     )
 
 
