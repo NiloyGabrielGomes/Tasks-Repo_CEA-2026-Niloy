@@ -181,7 +181,13 @@ async def update_meal_participation(
             detail="You don't have permission to update this user's meals"
         )
     
-    # Enforce cutoff for regular employees (not admin/TL)
+    blocked, reason = storage.is_participation_blocked(target_date)
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=reason,
+        )
+
     if current_user.role == UserRole.EMPLOYEE and target_date == date.today() and _is_cutoff_passed():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -264,6 +270,13 @@ async def admin_update_participation(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only update users in your team"
         )
+
+    blocked, reason = storage.is_participation_blocked(date.today())
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=reason,
+        )
     
     # Validate meal type
     try:
@@ -325,6 +338,14 @@ async def batch_admin_update_participation(
     succeeded = 0
     failed = 0
     today = date.today()
+
+    blocked, reason = storage.is_participation_blocked(today)
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=reason,
+        )
+
     enabled_types = storage.get_enabled_meal_types()
 
     for item in payload.updates:
