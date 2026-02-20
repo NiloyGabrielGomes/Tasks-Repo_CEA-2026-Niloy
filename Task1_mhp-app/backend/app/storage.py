@@ -94,10 +94,10 @@ def get_all_participation() -> List[MealParticipation]:
     participation_list = []
 
     for record in data.get("participation", []):
-        if isinstance(record.get("date"), str):
-            record["date"] = datetime.fromisoformat(record["date"]).date()
-        if isinstance(record.get("updated_at"), str):
-            record["updated_at"] = datetime.fromisoformat(record["updated_at"])
+        # if isinstance(record.get("date"), str):
+        #     record["date"] = datetime.fromisoformat(record["date"]).date()
+        # if isinstance(record.get("updated_at"), str):
+        #     record["updated_at"] = datetime.fromisoformat(record["updated_at"])
 
         participation_list.append(MealParticipation(**record))
 
