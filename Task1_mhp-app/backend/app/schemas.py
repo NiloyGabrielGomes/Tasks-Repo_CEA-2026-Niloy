@@ -367,6 +367,67 @@ class BatchParticipationResponse(BaseModel):
             }
         }
 
+
+# ===========================
+# Bulk Participation Schemas (FR-8)
+# ===========================
+
+class BulkParticipationRequest(BaseModel):
+    """Bulk-update meals for multiple users on a specific date."""
+    user_ids: List[str]
+    date: date
+    meals: Dict[str, bool]  
+    reason: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_ids": ["user-1", "user-2"],
+                "date": "2026-02-20",
+                "meals": {"lunch": True, "snacks": False},
+                "reason": "Team outing"
+            }
+        }
+
+
+class BulkParticipationResponse(BaseModel):
+    updated_count: int
+    failed: List[Dict[str, str]]
+    date: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "updated_count": 4,
+                "failed": [{"user_id": "user-3", "error": "User not found"}],
+                "date": "2026-02-20"
+            }
+        }
+
+
+# ===========================
+# Exception Participation Schema (FR-8)
+# ===========================
+
+class ExceptionParticipationRequest(BaseModel):
+    """Team Lead overrides a single user's meal participation with a reason."""
+    user_id: str
+    date: date
+    meal_type: str
+    is_participating: bool
+    reason: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": "user-1",
+                "date": "2026-02-20",
+                "meal_type": "lunch",
+                "is_participating": False,
+                "reason": "Working from home"
+            }
+        }
+
 class AdminParticipationUpdateResponse(BaseModel):
     message: str
     user_name: str

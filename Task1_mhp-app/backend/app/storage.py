@@ -137,7 +137,8 @@ def update_participation(
         target_date: date,
         meal_type: MealType,
         is_participating: bool,
-        updated_by: str
+        updated_by: str,
+        reason: str = None
 ) -> MealParticipation:
     data = _load_json(PARTICIPATION_FILE)
     records = data.get("participation", [])
@@ -154,6 +155,8 @@ def update_participation(
             record["is_participating"] = is_participating
             record["updated_by"] = updated_by
             record["updated_at"] = datetime.now().isoformat()
+            if reason is not None:
+                record["reason"] = reason
             found = True
             
             data["participation"] = records
@@ -170,10 +173,51 @@ def update_participation(
             date=target_date,
             is_participating=is_participating,
             updated_by=updated_by,
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
+            reason=reason,
         )
         return create_participation(new_record)
-    
+
+
+def bulk_update_participation(
+    user_ids: list[str],
+    target_date: date,
+    meals: dict[str, bool],
+    updated_by: str,
+    reason: str = None,
+) -> tuple[int, list[dict]]:
+
+    succeeded = 0
+    failed = []
+
+    enabled = get_enabled_meal_types()
+
+    for uid in user_ids:
+        user = get_user_by_id(uid)
+        if not user:
+            failed.append({"user_id": uid, "error": "User not found"})
+            continue
+        for meal_key, participating in meals.items():
+            try:
+                meal_enum = MealType(meal_key)
+            except ValueError:
+                failed.append({"user_id": uid, "error": f"Invalid meal type: {meal_key}"})
+                continue
+            if meal_enum not in enabled:
+                failed.append({"user_id": uid, "error": f"{meal_key} is not enabled"})
+                continue
+            update_participation(
+                user_id=uid,
+                target_date=target_date,
+                meal_type=meal_enum,
+                is_participating=participating,
+                updated_by=updated_by,
+                reason=reason,
+            )
+            succeeded += 1
+
+    return succeeded, failed
+
 def get_headcount_by_date(target_date: date) -> Dict[str, int]:
     participation_records = get_participation_by_date(target_date)
     headcount = {meal_type.value: 0 for meal_type in MealType}
@@ -186,13 +230,11 @@ def get_headcount_by_date(target_date: date) -> Dict[str, int]:
 
 
 def get_users_by_team(team: str) -> List[User]:
-    """Get all users in a specific team"""
     all_users = get_all_users()
     return [u for u in all_users if u.team and u.team.lower() == team.lower()]
 
 
 def get_headcount_by_date_and_team(target_date: date, team: str) -> Dict[str, int]:
-    """Get headcount filtered by team for a specific date"""
     team_users = get_users_by_team(team)
     team_user_ids = {u.id for u in team_users}
     participation_records = get_participation_by_date(target_date)
@@ -245,7 +287,6 @@ def _save_work_locations(locations: List[dict]) -> None:
 
 
 def get_work_location(user_id: str, target_date: date) -> Optional[WorkLocation]:
-    """Get a user's work location for a specific date."""
     locations = _load_work_locations()
     for loc in locations:
         loc_date = loc.get("date")
@@ -370,18 +411,15 @@ def _save_meal_config(config: Dict[str, bool]) -> None:
     _save_json(MEAL_CONFIG_FILE, {"enabled_meals": config})
 
 def get_enabled_meals() -> Dict[str, bool]:
-    """Get which meal types are currently enabled."""
     return _load_meal_config()
 
 def set_meal_enabled(meal_type: str, enabled: bool) -> Dict[str, bool]:
-    """Enable or disable a meal type. Returns updated config."""
     config = _load_meal_config()
     config[meal_type] = enabled
     _save_meal_config(config)
     return config
 
 def get_enabled_meal_types() -> List[str]:
-    """Get list of meal type values that are currently enabled."""
     config = _load_meal_config()
     return [mt for mt, enabled in config.items() if enabled]
 
@@ -531,5 +569,4 @@ def seed_initial_data() -> None:
 
 
 if __name__ == "__main__":
-    # Run seed data when this module is executed directly
     seed_initial_data()
