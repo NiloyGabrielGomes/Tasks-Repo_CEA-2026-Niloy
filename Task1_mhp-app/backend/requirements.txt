@@ -10,3 +10,4 @@ python-dotenv==1.0.1
 pytest==8.3.4
 sse-starlette==2.2.1
 sqlmodel==0.0.34
+tzdata==2025.3
