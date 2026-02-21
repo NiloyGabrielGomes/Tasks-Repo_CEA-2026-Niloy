@@ -4,6 +4,7 @@ from app.models import User, UserRole, WorkLocationType
 from app.auth import require_role
 from app import auth as auth_service
 from app import storage
+from app import utils
 from app.event_bus import notify_headcount_change
 from app.schemas import (
     WorkLocationUpdate,
@@ -57,7 +58,7 @@ async def get_my_work_location(
     current_user: User = Depends(auth_service.get_current_user),
 ):
     """Get the current user's work location for a date."""
-    day = target_date or date.today()
+    day = target_date or utils.get_today()
     wl = storage.get_work_location(current_user.id, day)
     if not wl:
         # Return default (Office)
@@ -82,7 +83,7 @@ async def get_locations_by_date(
     current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN])),
 ):
     """Get all users' work locations for a date. Team Leads see own team only."""
-    day = target_date or date.today()
+    day = target_date or utils.get_today()
     all_locations = storage.get_work_locations_by_date(day)
 
     if current_user.role == UserRole.TEAM_LEAD:

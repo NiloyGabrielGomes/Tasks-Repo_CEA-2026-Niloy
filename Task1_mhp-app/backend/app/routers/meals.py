@@ -19,6 +19,7 @@ from app.schemas import (
 from app import auth as auth_service
 from app import storage
 from app.event_bus import notify_headcount_change
+from app import utils
 
 router = APIRouter()
 
@@ -28,7 +29,7 @@ router = APIRouter()
 
 def _is_cutoff_passed() -> bool:
     """Check if the current time is past the cutoff hour (9 PM)."""
-    return datetime.now().hour >= CUTOFF_HOUR
+    return utils.is_cutoff_passed(CUTOFF_HOUR)
 
 # ===========================
 # Meal Configuration (Admin only)
@@ -82,7 +83,7 @@ async def get_today_meals(current_user: User = Depends(auth_service.get_current_
     """
     Get current user's meal participation for today
     """
-    today = date.today()
+    today = utils.get_today()
     participation = storage.get_user_participation(current_user.id, today)
     enabled = storage.get_enabled_meal_types()
     
@@ -187,7 +188,7 @@ async def update_meal_participation(
             detail=reason,
         )
 
-    if current_user.role == UserRole.EMPLOYEE and target_date == date.today() and _is_cutoff_passed():
+    if current_user.role == UserRole.EMPLOYEE and target_date == utils.get_today() and _is_cutoff_passed():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Meal participation changes are locked after 9:00 PM. You can update again tomorrow morning."
@@ -263,7 +264,7 @@ async def admin_update_participation(
             detail="Can only update users in your team"
         )
 
-    blocked, reason = storage.is_participation_blocked(date.today())
+    blocked, reason = storage.is_participation_blocked(utils.get_today())
     if blocked:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -286,7 +287,7 @@ async def admin_update_participation(
             detail=f"The meal type '{request.meal_type}' is not currently enabled"
         )
     
-    today = date.today()
+    today = utils.get_today()
     
     updated = storage.update_participation(
         user_id=request.user_id,
@@ -325,7 +326,7 @@ async def batch_admin_update_participation(
     results = []
     succeeded = 0
     failed = 0
-    today = date.today()
+    today = utils.get_today()
 
     blocked, reason = storage.is_participation_blocked(today)
     if blocked:
@@ -495,7 +496,7 @@ async def get_team_headcount_today(
     """
     Get headcount for the team lead's team for today
     """
-    today = date.today()
+    today = utils.get_today()
     headcount = storage.get_headcount_by_date_and_team(today, current_user.team)
     enabled_types = storage.get_enabled_meal_types()
     headcount = {k: v for k, v in headcount.items() if MealType(k) in enabled_types}
@@ -544,7 +545,7 @@ async def get_today_headcount(
     Get headcount totals for each meal type for today
     Team Leads and Admin only
     """
-    today = date.today()
+    today = utils.get_today()
     headcount = storage.get_headcount_by_date(today)
     enabled_types = storage.get_enabled_meal_types()
     headcount = {k: v for k, v in headcount.items() if MealType(k) in enabled_types}
