@@ -1,9 +1,8 @@
 from datetime import datetime, date, time, timezone
 import os
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    from backports.zoneinfo import ZoneInfo
+
+from zoneinfo import ZoneInfo
+
 
 # Default to Asia/Dhaka or UTC based on preference, but configurable via env
 APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Asia/Dhaka")
