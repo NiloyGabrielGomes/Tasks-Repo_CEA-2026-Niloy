@@ -181,6 +181,22 @@ export const specialDaysAPI = {
 };
 
 // ===========================
+// Headcount Breakdown API
+// ===========================
+
+export const headcountAPI = {
+  byTeam: (targetDate, team = null) =>
+    api.get('/api/headcount/by-team', {
+      params: { target_date: targetDate, ...(team ? { team } : {}) },
+    }),
+
+  byLocation: (targetDate, team = null) =>
+    api.get('/api/headcount/by-location', {
+      params: { target_date: targetDate, ...(team ? { team } : {}) },
+    }),
+};
+
+// ===========================
 // SSE Helpers
 // ===========================
 
