@@ -1,10 +1,8 @@
-# First iteration of Meal Headcount Planner
-
-# (MHP)
+# Meal Headcount Planner (MHP)
 
 ```
 Niloy Gabriel Gomes
-Feb 6, 2026
+Feb 18, 2026
 Status: Draft - Pending Review
 ```
 
@@ -13,7 +11,7 @@ Status: Draft - Pending Review
    - Summary
    - Problem Statement
 - [Goals and Non-Goals](#goals-and-non-goals)
-   - Goals (Iteration 1)
+   - Goals
    - Non-Goals
 - [Requirements](#requirements)
    - Functional Requirements
@@ -30,7 +28,7 @@ Status: Draft - Pending Review
    - 8. Documentation, Testing and Validation
    - 9. Local Deployment/Operations
 - [Risks, Assumptions, and Open Questions](#risks-assumptions-and-open-questions)
-- [Key Design Decisions for Iteration](#key-design-decisions-for-iteration)
+- [Key Design Decisions](#key-design-decisions)
 
 ---
 
@@ -45,7 +43,7 @@ tracking.
 Frontend: React + Vite
 Backend API: Python (FastAPI)
 Authentication: Basic login with roles (Employee / Team Lead / Admin/Logistics)
-Storage: File-based JSON for the first iteration
+Storage: File-based JSON (to be migrated to a database in a future iteration)
 Packaging: Run locally
 Development Tools:
 ● Backend: pip + requirements.txt
@@ -55,15 +53,15 @@ Development Tools:
 ### Summary
 
 ```
-This document contains a comprehensive, development roadmap for building the first
-iteration of the Meal Headcount Planner (MHP). It outlines the complete technical
-implementation using Python-FastAPI for the backend and React for the frontend,
-including detailed guidance on project structure, data models, authentication, API,
-endpoints, and UI components. The plan breaks down the development process into
-actionable phases, from initial setup through local deployment, with specific
-implementation details for each layer of the stack. Additionally, it includes key design
-decisions, success criteria, and clearly defines what features are in-scope versus deferred
-to future iterations.
+This document contains a comprehensive development roadmap for the Meal Headcount
+Planner (MHP). It covers self-service meal participation, role-based access control,
+team/department visibility, special day controls, improved headcount reporting with
+Office/WFH splits, live updates, daily announcement drafts, work location tracking,
+and company-wide WFH period management. It outlines the technical implementation
+using Python-FastAPI for the backend and React for the frontend, including data
+models, API endpoints, and UI components required for these features. The plan
+breaks down the development process into actionable phases, with specific
+implementation details for each layer of the stack.
 ```
 ### Problem Statement
 The organization currently uses a manual Excel-based process to track daily meal participation for 100+ employees. This approach presents several critical challenges, like operational ineffeciencies, data quality issues, and potential negative business impacts due to inaccurate head counts. The proposed solution targets to alleviate these challenges by increasing efficiency and accuracy.
@@ -72,43 +70,74 @@ The organization currently uses a manual Excel-based process to track daily meal
 
 ## Goals and Non-Goals
 
-### Goals (Iteration 1)
+### Goals
 
 **Primary Goals:**
 
-1. **Enable Self-Service Meal Management**
-2. **Provide Real-Time Headcount Visibility**
-3. **Implement Role-Based Access Control**
-4. **Replace Excel with Reliable System**
-5. **Default Opt-In Approach**
+1. **Self-Service Meal Participation**
+   - Employees can view and toggle their daily meal opt-in/out status
+   - Employees default to "opted-in" for all meals
+
+2. **Role-Based Access Control**
+   - Three-tier role system: Employee, Team Lead, Admin/Logistics
+   - Each role has scoped permissions for viewing and modifying data
+
+3. **Administrative Override**
+   - Team Leads and Admins can update participation on behalf of users
+   - All overrides are recorded with who made the change and a timestamp for audit
+
+4. **Headcount Reporting**
+   - Real-time headcount totals by meal type, team, overall total, and Office vs WFH split
+   - Headcount updates immediately when participation changes
+
+5. **Team-Based Visibility**
+   - Employees can see which team they belong to
+   - Team Leads can view participation for their own team for the day
+   - Admin/Logistics can view participation across all teams
+
+6. **Bulk and Exception Handling**
+   - Team Leads/Admin can apply bulk actions for their scope (e.g., mark a group as opted out due to offsite/event)
+
+7. **Special Day Controls**
+   - Admin/Logistics can mark a day as Office Closed, Government Holiday, or Special Celebration Day (with a note)
+   - System adjusts meal availability based on the day type
+
+8. **Live Updates (No Refresh)**
+   - Headcount totals update immediately when any employee changes participation, without page reload
 
 **Secondary Goals:**
 
-6. **Build Foundation for Future Iterations**
-   - Design architecture to support database migration
-   - Create extensible data models
-   - Implement authentication framework for future features
+9. **Daily Announcement Draft**
+   - Logistics/Admin can generate a copy/paste-friendly message for a selected date
+   - Message includes meal-wise totals and highlights special-day notes
 
-7. **Provide Audit Trail**
-   - Track who made changes to participation records
-   - Record timestamps for all updates
-   - Enable troubleshooting and accountability
+10. **Work Location Tracking**
+    - Employees can set their work location for a selected date: Office / WFH
+    - Team Leads / Admin can correct missing work-location entries
+
+11. **Company-Wide WFH Period**
+    - Admin/Logistics can declare a date range as "WFH for everyone"
+    - During the declared period, the system treats employees as WFH by default for reporting
+
+12. **Extensible Architecture**
+    - Design architecture to support future database migration
+    - Create extensible data models
+    - Implement authentication framework for future features
 
 ### Non-Goals
 
 **Features Deferred to Future Iterations:**
 
 1. **Advanced Planning Features**
-   - Multi-day meal planning (only "today" in Iteration 1)
    - Weekly/monthly calendar view
    - Advance meal scheduling
    - Recurring participation patterns
 
 2. **Cutoff Time Enforcement**
-3. **Special Day Handling**
-4. **Notifications and Reminders**
-5. **Analytics and Reporting**
-6. **Advanced User Management**  
+3. **Notifications and Reminders** (push/email[optional])
+4. **Analytics and Reporting** (historical logs, charts)
+5. **Advanced User Management** (self-service role changes)
+
 
 ---
 
@@ -145,6 +174,47 @@ The organization currently uses a manual Excel-based process to track daily meal
 - **FR-6.1:** Admins can create new users with any rolem view list of all users, deactive users (soft delete), update user information (name, role, department)
 - **FR-6.2:** Users can view their own profile information
 
+#### FR-7: Team-Based Visibility
+- **FR-7.1:** Employees can see which team they belong to on their dashboard
+- **FR-7.2:** Team Leads can view participation status for all members of their own team for a given day
+- **FR-7.3:** Admin/Logistics can view participation across all teams with team-level grouping
+
+#### FR-8: Bulk and Exception Handling
+- **FR-8.1:** Team Leads can apply bulk opt-out actions for members within their team scope (e.g., offsite/event)
+- **FR-8.2:** Admins can apply bulk opt-out actions across any team or the entire organization
+- **FR-8.3:** Bulk actions must record who initiated them and include timestamps for audit
+
+#### FR-9: Special Day Controls
+- **FR-9.1:** Admin/Logistics can mark a date as one of: Office Closed, Government Holiday, or Special Celebration Day
+- **FR-9.2:** Special Celebration Day entries must support an optional note/description
+- **FR-9.3:** When a day is marked as "Office Closed" or "Government Holiday", the system must disable meal participation for that day
+- **FR-9.4:** Special day status must be visible to all users on the relevant date's view
+
+#### FR-10: Improved Headcount Reporting
+- **FR-10.1:** Headcount totals must be available broken down by meal type
+- **FR-10.2:** Headcount totals must be available broken down by team
+- **FR-10.3:** System must display overall total headcount
+- **FR-10.4:** System must display Office vs WFH split in headcount reporting
+
+#### FR-11: Live Updates
+- **FR-11.1:** When any employee updates their meal participation, all visible headcount totals must update immediately without requiring a page reload
+- **FR-11.2:** Live updates must apply to Admin dashboard, Team Lead dashboard, and any headcount display
+
+#### FR-12: Daily Announcement Draft
+- **FR-12.1:** Logistics/Admin can generate a copy/paste-friendly text message for a selected date
+- **FR-12.2:** The generated message must include meal-wise headcount totals
+- **FR-12.3:** The generated message must highlight any special-day notes (holiday, office closed, celebration)
+
+#### FR-13: Work Location Management
+- **FR-13.1:** Employees can set their work location for a selected date as either "Office" or "WFH"
+- **FR-13.2:** Team Leads can view and correct missing work-location entries for their team members
+- **FR-13.3:** Admins can view and correct missing work-location entries for any employee
+
+#### FR-14: Company-Wide WFH Period
+- **FR-14.1:** Admin/Logistics can declare a date range as "WFH for everyone"
+- **FR-14.2:** During a declared WFH period, the system must treat all employees as WFH by default for reporting purposes
+- **FR-14.3:** Individual employees can still override their location if they come to the office during a WFH period
+
 ### Non-Functional Requirements
 
 #### NFR-1: Performance
@@ -167,6 +237,7 @@ The organization currently uses a manual Excel-based process to track daily meal
 
 #### Business Constraints
 - **BC-1:** Development timeline: Feb 10th, 2026 for Iteration 1
+- **BC-1.1:** Development timeline: Feb 23th, 2026 for Iteration 2 ← Iteration 2
 - **BC-2:** Single developer resource
 
 #### User Constraints
@@ -224,7 +295,12 @@ The organization currently uses a manual Excel-based process to track daily meal
           │  │   Routers:               │  │                 
           │  │   ├─ auth.py             │  │                 
           │  │   ├─ meals.py            │  │                 
-          │  │   └─ users.py            │  │                 
+          │  │   ├─ users.py            │  │                 
+          │  │   ├─ teams.py            │  │
+          │  │   ├─ special_days.py     │  │
+          │  │   ├─ work_locations.py   │  │
+          │  │   ├─ sse.py              │  │
+          │  │   └─ announcements.py    │  │  
           │  └──────────────────────────┘  │                 
           │  ┌──────────────────────────┐  │                 
           │  │   Business Logic:        │  │                 
@@ -244,7 +320,12 @@ The organization currently uses a manual Excel-based process to track daily meal
           │  ├─ save_json()                │                 
           │  ├─ get_user_by_email()        │                 
           │  ├─ update_participation()     │                 
-          │  └─ get_headcount_by_date()    │                 
+          │  ├─ get_headcount_by_date()    │                 
+          │  ├─ get_team_participation()   │
+          │  ├─ bulk_update_participation()│
+          │  ├─ get_special_day()          │
+          │  ├─ get_work_location()        │
+          │  └─ get_wfh_periods()          │  
           └───────────────┬────────────────┘                 
                           │                                   
                     JSON File I/O                             
@@ -254,7 +335,10 @@ The organization currently uses a manual Excel-based process to track daily meal
           │                                │                 
           │  /backend/data/                │                 
           │  ├─ users.json                 │                 
-          │  └─ meal_participation.json    │                 
+          │  ├─ meal_participation.json    │                 
+          │  ├─ special_days.json          │
+          │  ├─ work_locations.json        │
+          │  └─ company_wfh_periods.json   │  
           └────────────────────────────────┘                 
 ```
 
@@ -270,7 +354,11 @@ mhp-app/
 │ │ └── routers/
 │ ├── data/
 │ │ ├── users.json
-│ │ └── meal_participation.json
+│ │ ├── meal_participation.json
+│ │ ├── meal_config.json
+│ │ ├── special_days.json
+│ │ ├── work_locations.json
+│ │ └── company_wfh_periods.json
 │ ├── requirements.txt
 │ └── .env
 ├── frontend/
@@ -298,9 +386,24 @@ Define the following models in models.py using the Pydantic validation library:
 ● MealType(enum) - Lunch, Snacks, Iftar, EventDinner, OptionalDinner
    (Note: Iftar is not a default meal. Special meals like Iftar will be handled through admin configuration)
 ● UserRole(enum) - Employee, TeamLead, Admin
+
+● SpecialDay - id, date, day_type, note, created_by, created_at
+● DayType(enum) - OfficeClosed, GovernmentHoliday, SpecialCelebration
+● WorkLocation - id, user_id, date, location, updated_by, updated_at
+● WorkLocationType(enum) - Office, WFH
+● CompanyWFHPeriod - id, start_date, end_date, declared_by, created_at
+
 Implement file-based JSON storage utilities in storage.py. Use {load_json(filename)} to
 read data, {save_json(filename, data)} to write data, and {get_by_id();
 create(); update(); delete()} as helpers. Create seed data for testing purposes.
+
+Storage files:
+● users.json - Stores user records
+● meal_participation.json - Stores per-user per-date meal participation
+● meal_config.json - Stores meal type configuration
+● special_days.json - Stores special day entries (office closed, holidays, celebrations)
+● work_locations.json - Stores per-user per-date work location selections
+● company_wfh_periods.json - Stores admin-declared company-wide WFH date ranges
 
 ### 3. User Flows
 
@@ -335,7 +438,7 @@ Flow 1: Employee Daily Check-in and Opt-out
                    │   │ ✓ Lunch         [Opted In ]    │
                    │   │ ✓ Snacks        [Opted In ]    │
                    │   │ ✓ Iftar         [Opted In ]    │
-                   │   │    ├─> Applicable  if enabled   │ ← Changed
+                   │   │    ├─> Applicable  if enabled   │
                    │   │        by admin config          │
                    │   │ ✓ Event Dinner  [Opted In ]    │
                    │   │ ✓ Optional Dinner [Opted In ]  │
@@ -358,10 +461,10 @@ Flow 1: Employee Daily Check-in and Opt-out
                    │   │   │
                    │   │   └─> UI Updates:
                    │   │       ┌─────────────────────────────────┐
-                   │   │       │ ✗ Lunch         [Opted Out]    │  ← Changed
+                   │   │       │ ✗ Lunch         [Opted Out]    │
                    │   │       │ ✓ Snacks        [Opted In ]    │
                    │   │       │ ✓ Iftar         [Opted In ]    │
-                   │   │       │   ├─> Applicable  if enabled   │ ← Changed
+                   │   │       │   ├─> Applicable  if enabled   │
                    │   │       │        by admin config         │
                    │   │       │ ✓ Event Dinner  [Opted In ]    │
                    │   │       │ ✓ Optional Dinner [Opted In ]  │
@@ -441,7 +544,7 @@ Scenario: Team member calls in sick, can't access system
                    │ □ Lunch                                 │
                    │ □ Snacks                                │
                    │ □ Iftar                                 │
-                   │    ├─> Applicable  if enabled           │ ← Changed
+                   │    ├─> Applicable  if enabled           │
                    │        by admin config                  │
                    │ □ Event Dinner                          │
                    │ □ Optional Dinner                       │
@@ -476,7 +579,7 @@ Flow 3: Admin Viewing Headcount for Meal Planning
 │             Admin Daily Headcount Workflow                   │
 └─────────────────────────────────────────────────────────────┘
 
-Scenario: Logistics team needs headcount for meal preparation ← Changed
+Scenario: Logistics team needs headcount for meal preparation
 
 1. Evening (9:00 PM) - Initial count for the day after (After cut-off time)
    │
@@ -544,7 +647,7 @@ Flow 4: New Employee Registration
                    │ Email:     [               ]        │
                    │ Password:  [               ]        │
                    │ Confirm:   [               ]        │
-                   │ Teams:     [               ]        │ ← Changed
+                   │ Teams:     [               ]        │
                    │                                     │
                    │ [Cancel]  [Register]                │
                    └─────────────────────────────────────┘
@@ -553,7 +656,7 @@ Flow 4: New Employee Registration
                    │   - Name: "Alice Johnson"
                    │   - Email: "alice.johnson@company.com"
                    │   - Password: "SecurePass123!"
-                   │   - team: "Marketing"                 ← Changed
+                   │   - team: "Marketing"
                    │
                    ├─> Clicks "Register"
                    │
@@ -564,7 +667,7 @@ Flow 4: New Employee Registration
                    │     name: "Alice Johnson",
                    │     email: "alice.johnson@company.com",
                    │     password: "SecurePass123!",
-                   │     team: "Marketing"                ← Changed
+                   │     team: "Marketing"
                    │   }
                    │
                    ├─> [Backend Processing]
@@ -590,6 +693,237 @@ Alternative Flow 4A: Email Already Registered
 Total time: ~2 minutes 
 ```
 
+Flow 5: Team Lead Viewing Team Participation
+```
+┌─────────────────────────────────────────────────────────────┐
+│           Team Lead Viewing Team Participation              │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Team Lead wants to see today's participation for their team
+
+1. Team Lead logs in
+   │
+   └─> TEAM LEAD DASHBOARD
+       │
+       ├─> Views: "My Team - Today's Participation"
+       │   ┌─────────────────────────────────────────────────────────┐
+       │   │ Engineering Team - Thursday, February 19, 2026          │
+       │   │                                                         │
+       │   │ ┌────────────────┬────────┬────────┬────────┬──────┐    │
+       │   │ │ Employee       │ Lunch  │ Snacks │ Iftar  │ Loc  │    │
+       │   │ ├────────────────┼────────┼────────┼────────┼──────┤    │
+       │   │ │ John Doe       │  ✓ In  │  ✓ In  │  ✓ In  │ Off  │    │
+       │   │ │ Jane Smith     │  ✗ Out │  ✓ In  │  ✓ In  │ WFH  │    │
+       │   │ │ Bob Wilson     │  ✓ In  │  ✓ In  │  ✗ Out │ Off  │    │
+       │   │ └────────────────┴────────┴────────┴────────┴──────┘    │
+       │   │                                                         │
+       │   │ Team Summary: Lunch: 2/3 | Snacks: 3/3 | Iftar: 2/3     │
+       │   │ Location: Office: 2 | WFH: 1                            │
+       │   └─────────────────────────────────────────────────────────┘
+       │
+       └─> Total time: ~10 seconds
+
+```
+
+Flow 6: Admin Marking a Special Day
+```
+┌─────────────────────────────────────────────────────────────┐
+│               Admin Marking a Special Day                   │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Admin marks a date as a Government Holiday
+
+1. Admin logs in
+   │
+   └─> ADMIN DASHBOARD
+       │
+       ├─> Navigates to "Special Day Controls"
+       │
+       └─> SPECIAL DAY FORM
+           ┌─────────────────────────────────────────┐
+           │ Mark Special Day                        │
+           │                                         │
+           │ Date:     [February 21, 2026   ]        │
+           │ Type:     [Government Holiday ▼]        │
+           │ Note:     [Shaheed Day          ]       │
+           │                                         │
+           │ [Cancel]  [Save]                        │
+           └─────────────────────────────────────────┘
+           │
+           ├─> Admin clicks "Save"
+           │
+           ├─> [API Call: POST /api/special-days]
+           │
+           ├─> [System creates special day record]
+           │   - Meal participation disabled for that date
+           │   - All users see "Government Holiday" banner
+           │
+           └─> Success: "February 21 marked as Government Holiday"
+
+Total time: ~30 seconds
+```
+
+Flow 7: Admin/Team Lead Applying Bulk Opt-Out
+```
+┌─────────────────────────────────────────────────────────────┐
+│            Bulk Opt-Out for Team/Group                       │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Marketing team is on an offsite, Team Lead marks all as opted out
+
+1. Team Lead logs in
+   │
+   └─> TEAM LEAD DASHBOARD
+       │
+       ├─> Clicks "Bulk Actions"
+       │
+       └─> BULK ACTION FORM
+           ┌─────────────────────────────────────────┐
+           │ Bulk Update - Marketing Team            │
+           │                                         │
+           │ Date: [February 20, 2026      ]         │
+           │ Action: [Opt Out All Meals    ▼]        │
+           │                                         │
+           │ Affected Members:                       │
+           │   ☑ Alice Johnson                       │
+           │   ☑ Charlie Brown                       │
+           │   ☑ Diana Prince                        │
+           │                                         │
+           │ Reason: [Team offsite event   ]         │
+           │                                         │
+           │ [Cancel]  [Apply Bulk Action]            │
+           └─────────────────────────────────────────┘
+           │
+           ├─> Team Lead clicks "Apply Bulk Action"
+           │
+           ├─> [API Call: POST /api/meals/participation/bulk]
+           │
+           ├─> [System updates all selected members]
+           │   - Sets is_participating = false for all meals
+           │   - Records updated_by = teamlead@company.com
+           │   - Records timestamp for audit
+           │
+           └─> Success: "3 members opted out for February 20"
+
+Total time: ~1 minute
+```
+
+Flow 8: Employee Setting Work Location
+```
+┌─────────────────────────────────────────────────────────────┐
+│            Employee Setting Work Location                    │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Employee marks their location as WFH for tomorrow
+
+1. Employee logs in
+   │
+   └─> EMPLOYEE DASHBOARD
+       │
+       ├─> Sees "Work Location" section:
+       │   ┌─────────────────────────────────────────┐
+       │   │ Work Location                           │
+       │   │                                         │
+       │   │ Date: [February 20, 2026      ]         │
+       │   │                                         │
+       │   │ Location: ( ) Office   (●) WFH          │
+       │   │                                         │
+       │   │ [Save Location]                         │
+       │   └─────────────────────────────────────────┘
+       │
+       ├─> Selects "WFH" and clicks "Save Location"
+       │
+       ├─> [API Call: PUT /api/work-locations]
+       │
+       ├─> [System records work location]
+       │
+       └─> Success: "Work location set to WFH for February 20"
+
+Total time: ~15 seconds
+```
+
+Flow 9: Admin Generating Daily Announcement
+```
+┌─────────────────────────────────────────────────────────────┐
+│          Admin Generating Daily Announcement                │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Logistics generates a daily summary message
+
+1. Admin logs in
+   │
+   └─> ADMIN DASHBOARD
+       │
+       ├─> Navigates to "Daily Announcement"
+       │
+       ├─> Selects date: February 20, 2026
+       │
+       ├─> Clicks "Generate Announcement"
+       │
+       ├─> [API Call: GET /api/announcements/draft?date=2026-02-20]
+       │
+       └─> GENERATED MESSAGE:
+           ┌─────────────────────────────────────────────────────┐
+           │ 📋 Meal Headcount - February 20, 2026               │
+           │                                                     │
+           │ 🏢 Special Note: Normal working day                 │
+           │                                                     │
+           │ Lunch:           85 people                          │
+           │ Snacks:          90 people                          │
+           │ Iftar:           42 people                          │
+           │ Event Dinner:     0 people                          │
+           │ Optional Dinner: 10 people                          │
+           │                                                     │
+           │ Office: 72 | WFH: 28                                │
+           │                                                     │
+           │ [Copy to Clipboard]                                 │
+           └─────────────────────────────────────────────────────┘
+           │
+           └─> Admin clicks "Copy to Clipboard"
+               │
+               └─> Pastes into messaging platform
+
+Total time: ~20 seconds
+```
+
+Flow 10: Admin Declaring Company-Wide WFH Period
+```
+┌─────────────────────────────────────────────────────────────┐
+│         Admin Declaring Company-Wide WFH Period             │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Company declares WFH for a week due to office renovation
+
+1. Admin logs in
+   │
+   └─> ADMIN DASHBOARD
+       │
+       ├─> Navigates to "Company WFH Settings"
+       │
+       └─> WFH PERIOD FORM
+           ┌─────────────────────────────────────────┐
+           │ Declare Company-Wide WFH Period         │
+           │                                         │
+           │ Start Date: [March 1, 2026     ]        │
+           │ End Date:   [March 7, 2026     ]        │
+           │                                         │
+           │ [Cancel]  [Declare WFH Period]          │
+           └─────────────────────────────────────────┘
+           │
+           ├─> Admin clicks "Declare WFH Period"
+           │
+           ├─> [API Call: POST /api/wfh-periods]
+           │
+           ├─> [System creates WFH period record]
+           │   - All employees treated as WFH for March 1-7
+           │   - Individuals can still override to "Office"
+           │   - Headcount reports reflect WFH default
+           │
+           └─> Success: "WFH period declared: March 1 - March 7, 2026"
+
+Total time: ~30 seconds
+```
+
 ### 4. Authentication and Authorization
 
 ```
@@ -607,7 +941,12 @@ Create routers in routers/ directory:
 ● auth.py - Authentication endpoints
 ● meals.py - Meal participation endpoints
 ● users.py - User management endpoints
+● teams.py - Team visibility endpoints
+● special_days.py - Special day control endpoints
+● work_locations.py - Work location endpoints
+● announcements.py - Daily announcement draft endpoints
 ```
+
 Core endpoints:
 ```
 ● POST /api/auth/login - User authentication (returns JWT)
@@ -631,6 +970,50 @@ Admin Endpoints:
 ● GET /api/meals/headcount/today - Get meal headcount totals
 (Admin/Logistics only)
 ● GET /api/users/me - Current user profile
+```
+
+Team Visibility:
+```
+● GET /api/teams/me/participation - Team Lead views own team's participation for today
+● GET /api/teams/all/participation - Admin views participation across all teams
+● GET /api/teams - List all teams
+```
+
+Bulk Actions:
+```
+● POST /api/meals/participation/bulk - Bulk opt-out for a group of users (Team Lead: own team, Admin: any)
+```
+
+Special Day Controls:
+```
+● POST /api/special-days - Admin marks a date as Office Closed / Government Holiday / Special Celebration
+● GET /api/special-days?date={date} - Get special day info for a date
+● GET /api/special-days?start={date}&end={date} - List special days in a date range
+● DELETE /api/special-days/{id} - Admin removes a special day entry
+```
+
+Improved Headcount:
+```
+● GET /api/meals/headcount?date={date} - Headcount totals by meal type, team, overall, and Office/WFH split
+```
+
+Work Location:
+```
+● PUT /api/work-locations - Employee sets their work location for a date
+● GET /api/work-locations?user_id={id}&date={date} - Get work location for a user/date
+● PUT /api/work-locations/admin - Team Lead/Admin corrects a missing work-location entry
+```
+
+Company-Wide WFH:
+```
+● POST /api/wfh-periods - Admin declares a date range as WFH for everyone
+● GET /api/wfh-periods - List all declared WFH periods
+● DELETE /api/wfh-periods/{id} - Admin removes a WFH period
+```
+
+Daily Announcement:
+```
+● GET /api/announcements/draft?date={date} - Generate copy/paste-friendly announcement for a date
 ```
 FastAPI features to be used:
 ```
@@ -660,29 +1043,70 @@ FastAPI features to be used:
 11. PUT /api/users/{user_id}
 12. DELETE /api/users/{user_id}
 
+### Phase 4 (Team & Location)
+13. GET /api/teams/me/participation
+14. GET /api/teams/all/participation
+15. PUT /api/work-locations
+16. PUT /api/work-locations/admin
+17. GET /api/work-locations
+
+### Phase 5 (Special Days & Bulk)
+18. POST /api/special-days
+19. GET /api/special-days
+20. DELETE /api/special-days/{id}
+21. POST /api/meals/participation/bulk
+
+### Phase 6 (Reporting & Announcements)
+22. GET /api/meals/headcount (improved with team/location splits)
+23. GET /api/announcements/draft
+24. POST /api/wfh-periods
+25. GET /api/wfh-periods
+26. DELETE /api/wfh-periods/{id}
+
 ### 6. Frontend Development
 
 Initialize a React app with Vite and install dependencies using react-router-dom, axios. Create
 API service layer in services/api.js. Set up the auth context for global user state.
 Pages/Views:
+```
 ● LoginPage.jsx - Login form
 ● EmployeeDashboard.jsx
 ○ Today's date display
 ○ List of meals with opt-in/out toggles
 ○ Confirmation feedback on updates
+○ Team name display
+○ Work location selector for a date
+○ Special day banner (holiday/office closed/celebration)
 ● AdminDashboard.jsx
-○ Headcount summary view (totals per meal type)
+○ Headcount summary view (totals per meal type, per team, Office/WFH split)
 ○ Option to update employee participation
 ○ Employee search/filter functionality
+○ Special day controls panel
+○ Daily announcement generator
+○ Company-wide WFH period management
+● TeamLeadDashboard.jsx
+○ Team participation overview for the day
+○ Bulk action controls (opt-out group of team members)
+○ Correct missing work-location entries for team members
+```
 Components:
 
 1. PrivateRoute.jsx - Protected route wrapper
-2. MealCard.jsx - Individual meal participation card/toggle
-3. HeadcountTable.jsx - Summary table for admin
+2. MealCard.jsx - Individual meal participation toggle
+3. HeadcountTable.jsx - Summary table for admin (with team/location breakdowns)
 4. Navbar.jsx - Navigation with user role indicator
 5. Loading.jsx, ErrorMessage.jsx - UI states
+6. TeamParticipationView.jsx - Team-level participation grid
+7. SpecialDayBanner.jsx - Displays special day status for the selected date
+8. SpecialDayForm.jsx - Admin form to mark a day as holiday/closed/celebration
+9. BulkActionForm.jsx - Bulk opt-out form for Team Lead/Admin
+10. WorkLocationSelector.jsx - Employee work location picker (Office / WFH)
+11. AnnouncementDraft.jsx - Generates and displays copy/paste-friendly announcement
+12. WFHPeriodManager.jsx - Admin form to declare/manage company-wide WFH periods
+13. LiveHeadcount.jsx - Real-time headcount display that updates without reload
 Implement auth context for user session and token for state management. Local state for meal
 participation data and API calls wrapped in try-catch with loading states.
+Implement polling or WebSocket-based mechanism for live headcount updates (FR-11).
 
 
 ### 7. Other Logic Implementation
@@ -726,7 +1150,7 @@ Test authentication flow for all roles and feature verifications.
 Add a README with setup instructions and API documentation (endpoints, payloads,
 responses). Add an user guide for each role with a sample .env configuration.
 
-### 9. Local Deployment/Operations ← Changed
+### 9. Local Deployment/Operations
 
 **Deployment Strategy:**
 
@@ -853,6 +1277,22 @@ User should log in again
   - Simple architecture
 - **Contingency:** Knowledge transfer session
 
+**Risk 8: Live Update Performance**
+- **Likelihood:** Medium
+- **Impact:** Medium (poor UX if polling is too frequent or too slow)
+- **Mitigation:**
+  - Use reasonable polling interval (15 seconds)
+  - Optimize headcount aggregation queries
+- **Contingency:** Increase polling interval or defer to WebSocket in future iteration
+
+**Risk 9: Special Day Misconfiguration**
+- **Likelihood:** Low
+- **Impact:** Medium (meals disabled on wrong day)
+- **Mitigation:**
+  - Confirmation prompt before saving special day
+  - Allow Admin to delete/correct special day entries
+- **Contingency:** Admin can remove the incorrect entry immediately
+
 ### Assumptions
 
 #### Technical Assumptions
@@ -864,19 +1304,24 @@ User should log in again
 #### Business Assumptions
 
 4. **Employees will check system daily** (not rely on notifications)
-5. **Current meal types will not change frequently** in Iteration 1
+5. **Current meal types will not change frequently**
 6. **Default opt-in acceptable** to stakeholders and employees
 7. **30-minute token expiration acceptable** for security/UX balance
+8. **Teams are pre-defined and stable** — team assignments do not change frequently
+9. **Work location is typically known a day in advance** by employees
+10. **Company-wide WFH periods are rare events** declared by Admin
 
 #### Process Assumptions
 
-8. **Admins available during business hours** for support
-9. **Logistics team checks headcount 2-3 times per day** (not real-time requirement)
-10. **Same-day updates sufficient** (no advance planning needed in Iteration 1)
+11. **Admins available during business hours** for support
+12. **Logistics team checks headcount 2-3 times per day** (not real-time requirement)
+13. **Same-day updates sufficient** (no advance planning needed)
+14. **Logistics team uses the daily announcement draft** to communicate with kitchen staff
+15. **Special days (holidays/closures) are known in advance** and set by Admin before the date
 
 ---
 
-## Key Design Decisions for Iteration
+## Key Design Decisions
 
 1. **Default opt-in approach** - All employees assumed participating unless they opt out
 2. **Same-day focus** - Only "today's" meals visible and editable (no historical/future view
@@ -884,7 +1329,9 @@ User should log in again
 3. **Simple storage** - File-based JSON (easy to migrate to DB later)
 4. **Minimal validation** - Basic role checks; advanced cutoff logic deferred to later iterations
 5. **Real-time counts** - Headcount calculated on-demand from participation records
-
-
-
-
+6. **Team-scoped access** - Team Leads see and manage only their own team's data; Admins see all
+7. **Special day overrides meals** - Office Closed and Government Holiday disable meal participation for the date
+8. **WFH default with override** - Company-wide WFH periods set default location; individuals can override to Office
+9. **Polling for live updates** - Use short-interval polling (e.g., 15s) rather than WebSockets for simplicity
+10. **Announcement as text** - Daily announcement is plain text for copy/paste, not email integration
+11. **Date-based work location** - Work location is tracked per user per date, not as a permanent attribute
