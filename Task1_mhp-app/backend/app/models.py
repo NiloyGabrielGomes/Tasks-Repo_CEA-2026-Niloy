@@ -1,12 +1,12 @@
 """
 Data models for the MHP application.
-Core data structures using Pydantic models.
+Core data structures using SQLModel.
 """
 
-from datetime import datetime, date
+from datetime import datetime, date as dt_date
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field, EmailStr
+from sqlmodel import SQLModel, Field
 import uuid
 
 class UserRole(str, Enum):
@@ -26,58 +26,46 @@ class DayType(str, Enum):
     GOVERNMENT_HOLIDAY = "governmentholiday"
     SPECIAL_EVENT = "specialevent"
 
-
 class WorkLocationType(str, Enum):
     OFFICE = "Office"
     WFH = "WFH"
 
-class User(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str = Field(..., min_length=1, max_length=255)
-    email: EmailStr
+class User(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    name: str = Field(min_length=1, max_length=255)
+    email: str = Field(index=True, unique=True)
     password_hash: str
-    role: UserRole = UserRole.EMPLOYEE
-    team: Optional[str] = Field(None, max_length=100)
-    is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.now)
+    role: UserRole = Field(default=UserRole.EMPLOYEE)
+    team: Optional[str] = Field(default=None, max_length=100)
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "123456",
-                "name": "John Doe",
-                "email": "john.doe@example.com",
-                "role": "employee",
-                "team": "Midas",
-                "is_active": True,
-                "created_at": "2023-01-01T00:00:00Z"
-            }
-        }
-
-
-
-class MealParticipation(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
+class MealParticipation(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    user_id: str = Field(foreign_key="user.id", index=True)
     meal_type: MealType
-    date: date
-    is_participating: bool = True
-    updated_by: Optional[str] = None
-    updated_at: datetime = Field(default_factory=datetime.now)
-    reason: Optional[str] = None
+    date: dt_date = Field(index=True)
+    is_participating: bool = Field(default=True)
+    updated_by: Optional[str] = Field(default=None)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    reason: Optional[str] = Field(default=None)
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "654321",
-                "user_id": "123456",
-                "meal_type": "lunch",
-                "date": "2023-01-15",
-                "is_participating": True,
-                "updated_by": "team_lead_1",
-                "updated_at": "2026-01-10T12:00:00Z"
-            }
-        }
+class WorkLocation(SQLModel, table=True):
+    """Tracks where a user is working on a specific date."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    user_id: str = Field(foreign_key="user.id", index=True)
+    date: dt_date = Field(index=True)
+    location: WorkLocationType = Field(default=WorkLocationType.OFFICE)
+    updated_by: Optional[str] = Field(default=None)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class SpecialDay(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    date: dt_date = Field(index=True, unique=True)
+    day_type: DayType
+    note: Optional[str] = Field(default=None)
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 DEFAULT_OPTED_IN_MEALS = {
     MealType.LUNCH,
@@ -91,32 +79,10 @@ ADMIN_CONTROLLED_MEALS = {
     MealType.EVENT_DINNER,
 }
 
-
-class WorkLocation(BaseModel):
-    """Tracks where a user is working on a specific date."""
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    date: date
-    location: WorkLocationType = WorkLocationType.OFFICE
-    updated_by: Optional[str] = None
-    updated_at: datetime = Field(default_factory=datetime.now)
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "wl-001",
-                "user_id": "user-1",
-                "date": "2026-02-19",
-                "location": "Office",
-                "updated_by": "user-1",
-                "updated_at": "2026-02-19T08:00:00"
-            }
-        }
-
 # Cutoff hour (24h format). Employees cannot change participation after this hour.
 CUTOFF_HOUR = 21  # 9:00 PM
 
-def create_default_participation(user_id: str, target_date: date) -> list[MealParticipation]:
+def create_default_participation(user_id: str, target_date: dt_date) -> list[MealParticipation]:
     return [
         MealParticipation(
             user_id=user_id,
@@ -124,27 +90,7 @@ def create_default_participation(user_id: str, target_date: date) -> list[MealPa
             date=target_date,
             is_participating=(meal_type in DEFAULT_OPTED_IN_MEALS),
             updated_by=None,
-            updated_at=datetime.now()
+            updated_at=datetime.utcnow()
         )
         for meal_type in MealType
     ]
-
-class SpecialDay(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    date: date
-    day_type: DayType
-    note: str | None = None
-    created_by: str
-    created_at: datetime = Field(default_factory=datetime.now)
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "sd-001",
-                "date": "2026-03-26",
-                "day_type": "governmentholiday",
-                "note": "Independence Day",
-                "created_by": "admin-user-id",
-                "created_at": "2026-02-19T10:30:00"
-            }
-        }
