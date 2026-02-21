@@ -244,6 +244,103 @@ def get_headcount_by_date_and_team(target_date: date, team: str) -> Dict[str, in
             
         return headcount
 
+def get_headcount_by_team_breakdown(
+    target_date: date,
+    team_filter: Optional[str] = None,
+) -> List[Dict]:
+    
+    all_users = get_all_users()
+    active_users = [u for u in all_users if u.is_active]
+
+    work_locations = get_work_locations_by_date(target_date)
+    location_map: Dict[str, WorkLocationType] = {wl.user_id: wl.location for wl in work_locations}
+
+    # Group by team
+    teams_map: Dict[str, List[User]] = {}
+    for user in active_users:
+        team_name = user.team or "Unassigned"
+        if team_filter and team_name.lower() != team_filter.lower():
+            continue
+        teams_map.setdefault(team_name, []).append(user)
+
+    result = []
+    for team_name, members in sorted(teams_map.items()):
+        office_count = 0
+        wfh_count = 0
+        member_data = []
+        for u in members:
+            raw_loc = location_map.get(u.id, WorkLocationType.OFFICE)
+            loc_val = raw_loc.value if hasattr(raw_loc, "value") else str(raw_loc)
+            if loc_val == WorkLocationType.WFH.value:
+                wfh_count += 1
+            else:
+                office_count += 1
+            member_data.append({
+                "user_id": u.id,
+                "name": u.name,
+                "email": u.email,
+                "location": loc_val,
+            })
+        result.append({
+            "team": team_name,
+            "total_members": len(members),
+            "office_count": office_count,
+            "wfh_count": wfh_count,
+            "members": member_data,
+        })
+    return result
+
+
+def get_headcount_by_location_breakdown(
+    target_date: date,
+    team_filter: Optional[str] = None,
+) -> Dict:
+    
+    all_users = get_all_users()
+    active_users = [u for u in all_users if u.is_active]
+
+    if team_filter:
+        active_users = [u for u in active_users if u.team and u.team.lower() == team_filter.lower()]
+
+    work_locations = get_work_locations_by_date(target_date)
+    location_map: Dict[str, WorkLocationType] = {wl.user_id: wl.location for wl in work_locations}
+
+    office_employees: List[Dict] = []
+    wfh_employees: List[Dict] = []
+
+    for user in active_users:
+        raw_loc = location_map.get(user.id, WorkLocationType.OFFICE)
+        loc_val = raw_loc.value if hasattr(raw_loc, "value") else str(raw_loc)
+        entry = {
+            "user_id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "team": user.team or "Unassigned",
+        }
+        if loc_val == WorkLocationType.WFH.value:
+            wfh_employees.append(entry)
+        else:
+            office_employees.append(entry)
+
+    return {
+        "total": len(active_users),
+        "office_count": len(office_employees),
+        "wfh_count": len(wfh_employees),
+        "locations": [
+            {
+                "location": WorkLocationType.OFFICE.value,
+                "count": len(office_employees),
+                "employees": office_employees,
+            },
+            {
+                "location": WorkLocationType.WFH.value,
+                "count": len(wfh_employees),
+                "employees": wfh_employees,
+            },
+        ],
+    }
+
+
 def initialize_daily_participation(target_date: date) -> None:
     all_users = get_all_users()
     

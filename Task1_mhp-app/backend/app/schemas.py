@@ -509,6 +509,89 @@ class HeadcountResponse(BaseModel):
         }
 
 
+# ===========================
+# Headcount Breakdown Schemas (6A-1 / 6A-2)
+# ===========================
+
+class HeadcountMemberEntry(BaseModel):
+    user_id: str
+    name: str
+    email: str
+    location: Optional[str] = None   # populated in by-team response
+    team: Optional[str] = None       # populated in by-location response
+
+
+class HeadcountTeamEntry(BaseModel):
+    team: str
+    total_members: int
+    office_count: int
+    wfh_count: int
+    members: List[HeadcountMemberEntry]
+
+
+class HeadcountByTeamResponse(BaseModel):
+    date: date
+    total_employees: int
+    teams: List[HeadcountTeamEntry]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-02-21",
+                "total_employees": 30,
+                "teams": [
+                    {
+                        "team": "Engineering",
+                        "total_members": 10,
+                        "office_count": 7,
+                        "wfh_count": 3,
+                        "members": [
+                            {"user_id": "u1", "name": "Alice", "email": "alice@co.com", "location": "Office"}
+                        ]
+                    }
+                ]
+            }
+        }
+
+
+class HeadcountLocationEntry(BaseModel):
+    location: str
+    count: int
+    employees: List[HeadcountMemberEntry]
+
+
+class HeadcountByLocationResponse(BaseModel):
+    date: date
+    total_employees: int
+    office_count: int
+    wfh_count: int
+    locations: List[HeadcountLocationEntry]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-02-21",
+                "total_employees": 30,
+                "office_count": 22,
+                "wfh_count": 8,
+                "locations": [
+                    {
+                        "location": "Office",
+                        "count": 22,
+                        "employees": [
+                            {"user_id": "u1", "name": "Alice", "email": "alice@co.com", "team": "Engineering"}
+                        ]
+                    },
+                    {
+                        "location": "WFH",
+                        "count": 8,
+                        "employees": []
+                    }
+                ]
+            }
+        }
+
+
 class MessageResponse(BaseModel):
     message: str
 

@@ -4,7 +4,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
-from app.routers import auth, users, meals, sse, teams, work_locations, special_days
+from app.routers import auth, users, meals, sse, teams, work_locations, special_days, headcount
 from app import storage
 from app.database import create_db_and_tables
 
@@ -53,6 +53,7 @@ app.include_router(sse.router)
 app.include_router(teams.router)
 app.include_router(work_locations.router)
 app.include_router(special_days.router)
+app.include_router(headcount.router)
 
 # ===========================
 # Health Check Endpoint
