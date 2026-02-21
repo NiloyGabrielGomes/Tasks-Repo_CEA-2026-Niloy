@@ -7,6 +7,7 @@ from app.models import (
     SpecialDay, DayType, create_default_participation, 
     ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS
 )
+from app import utils
 import json
 from pathlib import Path
 

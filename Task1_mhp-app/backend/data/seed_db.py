@@ -12,7 +12,7 @@ from passlib.context import CryptContext
 from app.database import engine, create_db_and_tables
 from app.models import User, UserRole, MealParticipation, MealType, WorkLocationType, WorkLocation
 from app.storage import create_user, initialize_daily_participation
-
+from app.utils import get_today
 def seed_data():
     print("Creating database and tables...")
     create_db_and_tables()
@@ -82,7 +82,7 @@ def seed_data():
         session.commit()
 
         print("Initializing daily participation...")
-        initialize_daily_participation(date.today())
+        initialize_daily_participation(get_today())
         
         print("Seeding complete!")
 
