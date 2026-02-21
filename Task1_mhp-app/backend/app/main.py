@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from app.routers import auth, users, meals, sse, teams, work_locations, special_days
 from app import storage
+from app.database import create_db_and_tables
 
 load_dotenv()
 
@@ -22,6 +23,10 @@ app = FastAPI(
         "email": "none@company.com"
     }
 )
+
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
 
 # ===========================
 # CORS Middleware
@@ -101,6 +106,7 @@ async def root():
 @app.on_event("startup")
 async def startup_event():
     """Initialize the application on startup"""
+    create_db_and_tables()
     print("=" * 60)
     print("🚀 Starting Meal Headcount Planner API...")
     print("=" * 60)
@@ -109,7 +115,6 @@ async def startup_event():
     print(f" API Docs: http://localhost:8000/docs")
     print(f" Health Check: http://localhost:8000/health")
     print("=" * 60)
-    storage.seed_initial_data()
     users = storage.get_all_users()
     
     if not users:
