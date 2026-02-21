@@ -1,5 +1,5 @@
 @echo off
-start "Backend" cmd /k "cd backend && venv\Scripts\activate && uvicorn app.main:app --reload --port 8000"
+start "Backend" cmd /k "cd backend && python run.py"
 start "Frontend" cmd /k "cd frontend && npm run dev"
 echo.
 echo Application started!
