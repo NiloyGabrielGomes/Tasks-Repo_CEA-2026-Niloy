@@ -337,7 +337,7 @@ export default function AdminDashboard() {
 
         {/* Headcount Summary */}
         <div className="mb-10">
-          <HeadcountTable headcount={headcount} totalUsers={activeUsers} />
+          <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} />
         </div>
 
         {/* Meal Configuration */}
