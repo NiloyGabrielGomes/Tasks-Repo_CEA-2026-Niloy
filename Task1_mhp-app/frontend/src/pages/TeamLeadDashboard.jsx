@@ -238,7 +238,7 @@ export default function TeamLeadDashboard() {
 
         {/* Headcount Summary */}
         <div className="mb-10">
-          <HeadcountTable headcount={headcount} totalUsers={activeUsers} />
+          <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} />
         </div>
 
         {/* Bulk Actions */}
