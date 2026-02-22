@@ -4,6 +4,7 @@ import { mealsAPI, specialDaysAPI } from '../services/api';
 import Navbar from '../components/Navbar';
 import MealCard from '../components/MealCard';
 import SpecialDayBanner from '../components/SpecialDayBanner';
+import WorkLocationSelector from '../components/WorkLocationSelector';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -117,6 +118,13 @@ export default function EmployeeDashboard() {
             <p className="text-amber-800 dark:text-amber-200 text-sm font-medium">
               Meal preferences are locked after 9:00 PM. You can update again tomorrow morning.
             </p>
+          </div>
+        )}
+
+        {/* Work Location Selector */}
+        {!isBlocked && (
+          <div className="mb-8">
+            <WorkLocationSelector disabled={cutoffPassed} />
           </div>
         )}
 
