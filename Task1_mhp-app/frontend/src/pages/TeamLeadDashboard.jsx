@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
 import SpecialDayBanner from '../components/SpecialDayBanner';
 import BulkActionForm from '../components/BulkActionForm';
+import AnnouncementDraft from '../components/AnnouncementDraft';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -265,6 +266,11 @@ export default function TeamLeadDashboard() {
         {/* Headcount Summary */}
         <div className="mb-10">
           <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} refreshKey={liveData?.timestamp} />
+        </div>
+
+        {/* Announcements */}
+        <div className="mb-10">
+          <AnnouncementDraft />
         </div>
 
         {/* Bulk Actions */}
