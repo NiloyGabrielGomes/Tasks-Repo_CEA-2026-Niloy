@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import MealCard from '../components/MealCard';
 import SpecialDayBanner from '../components/SpecialDayBanner';
 import WorkLocationSelector from '../components/WorkLocationSelector';
+import WFHPeriodManager from '../components/WFHPeriodManager';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -197,6 +198,11 @@ export default function EmployeeDashboard() {
             <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
             <div className="absolute -left-12 -top-12 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
           </div>
+        </div>
+
+        {/* WFH Periods */}
+        <div className="mt-10">
+          <WFHPeriodManager />
         </div>
       </main>
 

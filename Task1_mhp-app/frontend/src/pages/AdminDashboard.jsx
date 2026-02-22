@@ -7,6 +7,7 @@ import SpecialDayBanner from '../components/SpecialDayBanner';
 import SpecialDayForm from '../components/SpecialDayForm';
 import BulkActionForm from '../components/BulkActionForm';
 import AnnouncementDraft from '../components/AnnouncementDraft';
+import WFHPeriodManager from '../components/WFHPeriodManager';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -363,6 +364,11 @@ export default function AdminDashboard() {
         {/* Announcements */}
         <div className="mb-10">
           <AnnouncementDraft />
+        </div>
+
+        {/* WFH Periods */}
+        <div className="mb-10">
+          <WFHPeriodManager />
         </div>
 
         {/* Meal Configuration */}
