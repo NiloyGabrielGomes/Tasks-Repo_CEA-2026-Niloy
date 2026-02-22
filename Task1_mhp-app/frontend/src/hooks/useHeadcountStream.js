@@ -20,7 +20,7 @@ export default function useHeadcountStream(date = null) {
       clearTimeout(reconnectTimeoutRef.current);
     }
 
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem("access_token");
     if (!token) {
       setError("Not authenticated");
       setIsConnected(false);
