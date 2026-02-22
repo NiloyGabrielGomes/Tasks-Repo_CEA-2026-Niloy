@@ -221,6 +221,41 @@ export const announcementsAPI = {
 };
 
 // ===========================
+// WFH Periods API
+// ===========================
+
+export const wfhPeriodsAPI = {
+  list: ({ employeeId = null, team = null, startDate = null, endDate = null, page = 1, pageSize = 50 } = {}) =>
+    api.get('/api/wfh-periods', {
+      params: {
+        ...(employeeId ? { employee_id: employeeId } : {}),
+        ...(team ? { team } : {}),
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(endDate ? { end_date: endDate } : {}),
+        page,
+        page_size: pageSize,
+      },
+    }),
+
+  create: ({ employeeId, startDate, endDate, reason = null }) =>
+    api.post('/api/wfh-periods', {
+      employee_id: employeeId,
+      start_date: startDate,
+      end_date: endDate,
+      ...(reason ? { reason } : {}),
+    }),
+
+  update: (id, { startDate = null, endDate = null, reason = null }) =>
+    api.patch(`/api/wfh-periods/${id}`, {
+      ...(startDate ? { start_date: startDate } : {}),
+      ...(endDate ? { end_date: endDate } : {}),
+      ...(reason !== null ? { reason } : {}),
+    }),
+
+  delete: (id) => api.delete(`/api/wfh-periods/${id}`),
+};
+
+// ===========================
 // SSE Helpers
 // ===========================
 
