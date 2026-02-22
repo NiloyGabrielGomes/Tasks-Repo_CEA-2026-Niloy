@@ -15,8 +15,18 @@ router = APIRouter()
 async def get_all_users(current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))):
     
     all_users = storage.get_all_users()
-    
-    return UserListResponse(users=all_users, total=len(all_users))
+    user_responses = [
+        UserResponse(
+            id=u.id,
+            name=u.name,
+            email=u.email,
+            role=u.role,
+            team=u.team,
+            is_active=u.is_active
+        )
+        for u in all_users
+    ]
+    return UserListResponse(users=user_responses, total=len(user_responses))
 
 # ===========================
 # Get Current User Profile
