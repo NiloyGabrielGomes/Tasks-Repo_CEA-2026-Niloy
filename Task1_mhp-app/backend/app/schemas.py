@@ -1,7 +1,8 @@
 from datetime import datetime, date
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
-from app.models import UserRole, MealType, WorkLocationType, DayType
+from pydantic import ConfigDict
+from app.models import UserRole, MealType, WorkLocationType, DayType, AnnouncementStatus
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -37,24 +38,23 @@ class LoginResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
+        "example": {
+            "id": "123456",
+            "name": "John Doe",
+            "email": "john.doe@example.com",
+            "role": "employee",
+            "team": "Midas",
+            "is_active": True
+        }
+    })
+
     id: str
     name: str
     email: EmailStr
     role: UserRole
     team: Optional[str] = None
     is_active: bool = True
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "123456",
-                "name": "John Doe",
-                "email": "john.doe@example.com",
-                "role": "employee",
-                "team": "Midas",
-                "is_active": True
-            }
-        }
 
 class UserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
@@ -110,25 +110,10 @@ class UserUpdate(BaseModel):
 
 
 class UserListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     users: list[UserResponse]
     total: int
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "users": [
-                    {
-                        "id": "user-1",
-                        "name": "John Doe",
-                        "email": "john@company.com",
-                        "role": "Employee",
-                        "team": "Engineering",
-                        "is_active": True
-                    }
-                ],
-                "total": 1
-            }
-        }
 
 
 class UserCreateResponse(BaseModel):
@@ -659,7 +644,7 @@ class WorkLocationResponse(BaseModel):
     date: date
     location: str
     updated_by: Optional[str] = None
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attribute = True
@@ -779,5 +764,79 @@ class SpecialDayListResponse(BaseModel):
                     }
                 ],
                 "total": 1
+            }
+        }
+
+
+# ===========================
+# Announcement Schemas
+# ===========================
+
+class AnnouncementCreate(BaseModel):
+    """Request body for creating a new announcement draft."""
+    title: str = Field(..., min_length=1, max_length=255)
+    body: str = Field(..., min_length=1)
+    audience: str = Field(default="all", description='"all", "team_leads", or a specific team name')
+    scheduled_at: Optional[datetime] = Field(None, description="ISO datetime to schedule; omit for immediate publish")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "title": "Office closed tomorrow",
+                "body": "Due to a public holiday the office will be closed on Feb 22.",
+                "audience": "all",
+                "scheduled_at": None
+            }
+        }
+
+
+class AnnouncementPublishRequest(BaseModel):
+    scheduled_at: Optional[datetime] = Field(None, description="Supply to schedule; omit to publish immediately")
+
+    class Config:
+        json_schema_extra = {
+            "example": {"scheduled_at": "2026-02-22T09:00:00"}
+        }
+
+
+class AnnouncementResponse(BaseModel):
+    id: str
+    title: str
+    body: str
+    audience: str
+    status: str
+    scheduled_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "ann-001",
+                "title": "Office closed tomorrow",
+                "body": "Due to a public holiday the office will be closed.",
+                "audience": "all",
+                "status": "draft",
+                "scheduled_at": None,
+                "published_at": None,
+                "created_by": "user-id",
+                "created_at": "2026-02-21T10:00:00",
+                "updated_at": "2026-02-21T10:00:00"
+            }
+        }
+
+
+class AnnouncementListResponse(BaseModel):
+    announcements: List[AnnouncementResponse]
+    total: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "announcements": [],
+                "total": 0
             }
         }
