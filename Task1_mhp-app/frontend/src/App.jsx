@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { SSEStatusProvider } from './context/SSEStatusContext';
 import PrivateRoute from './components/PrivateRoute';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -21,6 +22,7 @@ function RootRedirect() {
 function App() {
   return (
     <BrowserRouter>
+      <SSEStatusProvider>
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -60,6 +62,7 @@ function App() {
         <Route path="/" element={<RootRedirect />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </SSEStatusProvider>
     </BrowserRouter>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { sseAPI } from "../services/api";
+import { useSSEPublish } from "../context/SSEStatusContext";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -12,6 +13,9 @@ export default function useHeadcountStream(date = null) {
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const activeRef = useRef(true);   // flipped to false on unmount / reconnect
+
+  // Global SSE status publisher (feeds Navbar indicator)
+  const { publish, reconnectSignal } = useSSEPublish();
 
   const connect = useCallback(() => {
     // Cancel any in-flight token fetch or reconnect timer from a previous call
@@ -33,8 +37,11 @@ export default function useHeadcountStream(date = null) {
     if (!accessToken) {
       setError("Not authenticated");
       setIsConnected(false);
+      publish({ status: 'disconnected' });
       return;
     }
+
+    publish({ status: 'connecting' });
 
     // ── Fetch a short-lived SSE token, then open EventSource ─────────────
     sseAPI
@@ -56,24 +63,30 @@ export default function useHeadcountStream(date = null) {
             setHeadcount(data);
             setError(null);
             setIsConnected(true);
+            publish({ status: 'connected', lastEventAt: new Date() });
           } catch (parseErr) {
             console.error("Failed to parse headcount SSE data:", parseErr);
           }
         });
 
         es.addEventListener("heartbeat", () => {
-          if (myActive.current) setIsConnected(true);
+          if (myActive.current) {
+            setIsConnected(true);
+            publish({ status: 'connected', lastEventAt: new Date() });
+          }
         });
 
         es.onopen = () => {
           if (!myActive.current) return;
           setIsConnected(true);
           setError(null);
+          publish({ status: 'connected', lastEventAt: new Date() });
         };
 
         es.onerror = () => {
           if (!myActive.current) return;
           setIsConnected(false);
+          publish({ status: 'disconnected' });
           es.close();
           eventSourceRef.current = null;
 
@@ -89,13 +102,18 @@ export default function useHeadcountStream(date = null) {
         console.error("Failed to obtain SSE token:", err);
         setError("Failed to connect to live updates");
         setIsConnected(false);
+        publish({ status: 'disconnected' });
 
         // Retry after 5 seconds
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
         }, 5000);
       });
-  }, [date]);
+  }, [date, publish]);
+
+  useEffect(() => {
+    if (reconnectSignal > 0) connect();
+  }, [reconnectSignal]);
 
   useEffect(() => {
     connect();
