@@ -1,4 +1,7 @@
 import os
+import secrets
+import threading
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Depends, HTTPException, status
@@ -13,12 +16,33 @@ from app.storage import get_user_by_email
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     raise ValueError("SECRET_KEY must be set in environment variables")
 
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+# ===========================
+# SSE One-Time Token Store
+# ===========================
+# Short-lived tokens (60 s) issued to authenticated users before they open an
+# EventSource connection.  Each token is single-use: it is marked "used" the
+# moment the SSE endpoint consumes it, preventing replay attacks.
+
+SSE_TOKEN_EXPIRE_SECONDS = 60  # keep small so leaked tokens are useless
+
+_sse_lock  = threading.Lock()
+_sse_store: dict[str, dict] = {}  
+
+
+def _cleanup_sse_store() -> None:
+    now = datetime.utcnow()
+    stale = [k for k, v in _sse_store.items() if v["expires_at"] < now]
+    for k in stale:
+        del _sse_store[k]
 
 # Using pbkdf2_sha256 due to bcrpypt compatibility issues.
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -176,6 +200,98 @@ def get_user_from_token(token: str) -> Optional[User]:
         return None
     
     return storage.get_user_by_email(email)
+
+
+# ===========================
+# SSE Short-Lived Token API
+# ===========================
+
+def create_sse_token(user: User) -> dict:
+    """
+    Issue a short-lived (SSE_TOKEN_EXPIRE_SECONDS), single-use JWT for the
+    SSE stream endpoint.  Returns {"token": <str>, "expires_in": <int>}.
+    """
+    expires_at = datetime.utcnow() + timedelta(seconds=SSE_TOKEN_EXPIRE_SECONDS)
+    jti = secrets.token_hex(16)          # unique nonce for revocation tracking
+
+    payload = {
+        "sub": user.email,
+        "type": "sse",
+        "jti": jti,
+        "exp": expires_at,
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    with _sse_lock:
+        _cleanup_sse_store()
+        _sse_store[jti] = {
+            "email": user.email,
+            "expires_at": expires_at,
+            "used": False,
+        }
+
+    logger.info("SSE token issued for user %s (jti=%s)", user.email, jti)
+    return {"token": token, "expires_in": SSE_TOKEN_EXPIRE_SECONDS}
+
+
+def validate_and_consume_sse_token(token: str) -> Optional[User]:
+    # ── JWT decode ──────────────────────────────────────────────
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError as exc:
+        logger.warning("SSE token validation failed — JWT error: %s", exc)
+        return None
+
+    # ── Claim checks ────────────────────────────────────────────
+    if payload.get("type") != "sse":
+        logger.warning("SSE token validation failed — not flagged as SSE token")
+        return None
+
+    jti: Optional[str] = payload.get("jti")
+    email: Optional[str] = payload.get("sub")
+
+    if not jti or not email:
+        logger.warning("SSE token validation failed — missing jti or sub claim")
+        return None
+
+    # ── Revocation store ────────────────────────────────────────
+    with _sse_lock:
+        entry = _sse_store.get(jti)
+
+        if entry is None:
+            logger.warning(
+                "SSE token validation failed — jti %r not found (expired or never issued)", jti
+            )
+            return None
+
+        if entry["used"]:
+            logger.warning(
+                "SSE token validation failed — jti %r already consumed (replay attempt by %s)", jti, email
+            )
+            return None
+
+        if entry["expires_at"] < datetime.utcnow():
+            logger.warning(
+                "SSE token validation failed — jti %r is expired (store clock check)", jti
+            )
+            del _sse_store[jti]
+            return None
+
+        # Consume — mark used so no second connection can reuse this token
+        entry["used"] = True
+
+    # ── User lookup ─────────────────────────────────────────────
+    user = storage.get_user_by_email(email)
+    if user is None:
+        logger.warning("SSE token validation failed — user %r not found", email)
+        return None
+
+    if not user.is_active:
+        logger.warning("SSE token validation failed — user %r is inactive", email)
+        return None
+
+    logger.info("SSE token consumed for user %s (jti=%s)", email, jti)
+    return user
 
 
 # ===========================

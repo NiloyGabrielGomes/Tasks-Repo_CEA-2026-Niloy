@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter, Query, HTTPException, Request, status
 from sse_starlette.sse import EventSourceResponse
 
-from app.auth import get_user_from_token
+from app.auth import get_user_from_token, validate_and_consume_sse_token, verify_token
 from app.event_bus import (
     wait_for_change, get_last_change_timestamp, wait_for_announcement,
     register_headcount_client, unregister_headcount_client,
@@ -88,10 +88,18 @@ def _build_headcount_payload(date_str: str | None = None) -> dict:
 @router.get("/headcount")
 async def headcount_stream(
     request: Request,
-    token: str = Query(..., description="JWT token for authentication"),
+    token: str = Query(..., description="Short-lived SSE token obtained from GET /api/auth/sse-token"),
     date: str | None = Query(None, description="Date in YYYY-MM-DD format (defaults to today)"),
 ):
-    user = get_user_from_token(token)
+    
+    raw_payload = verify_token(token)
+    is_sse_token = raw_payload is not None and raw_payload.get("type") == "sse"
+
+    if is_sse_token:
+        user = validate_and_consume_sse_token(token)
+    else:
+        user = get_user_from_token(token)
+
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

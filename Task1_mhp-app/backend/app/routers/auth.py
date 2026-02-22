@@ -3,6 +3,7 @@ from app.schemas import LoginRequest, LoginResponse, UserRegister, UserResponse
 from app.models import User, UserRole
 from app import auth as auth_service
 from app import storage
+from app.auth import get_current_user
 
 router = APIRouter()
 
@@ -84,6 +85,15 @@ async def register(request: UserRegister):
     auth_service.log_authentication_attempt(request.email, True)
     
     return auth_service.create_token_response(created_user)
+
+# ===========================
+# SSE Token Endpoint
+# ===========================
+
+@router.get("/sse-token")
+async def get_sse_token(current_user: User = Depends(get_current_user)):
+    return auth_service.create_sse_token(current_user)
+
 
 # ===========================
 # Logout Endpoint
