@@ -197,6 +197,30 @@ export const headcountAPI = {
 };
 
 // ===========================
+// Announcements API
+// ===========================
+
+export const announcementsAPI = {
+  createDraft: (title, body, audience, scheduledAt = null) =>
+    api.post('/api/announcements/draft', {
+      title,
+      body,
+      audience,
+      ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+    }),
+
+  list: (statusFilter = null) =>
+    api.get('/api/announcements/drafts', {
+      params: statusFilter ? { status: statusFilter } : {},
+    }),
+
+  publish: (id, scheduledAt = null) =>
+    api.post(`/api/announcements/${id}/publish`, {
+      ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+    }),
+};
+
+// ===========================
 // SSE Helpers
 // ===========================
 
