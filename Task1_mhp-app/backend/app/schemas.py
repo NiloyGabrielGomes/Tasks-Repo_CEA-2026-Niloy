@@ -2,7 +2,7 @@ from datetime import datetime, date
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
 from pydantic import ConfigDict
-from app.models import UserRole, MealType, WorkLocationType, DayType, AnnouncementStatus
+from app.models import UserRole, MealType, WorkLocationType, DayType, AnnouncementStatus, WFHPeriod
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -840,3 +840,48 @@ class AnnouncementListResponse(BaseModel):
                 "total": 0
             }
         }
+
+
+# ── WFH Period schemas ─────────────────────────────────────────
+
+class WFHPeriodCreate(BaseModel):
+    employee_id: str
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "employee_id": "uuid-here",
+                "start_date": "2026-03-01",
+                "end_date": "2026-03-05",
+                "reason": "Personal appointment"
+            }
+        }
+
+
+class WFHPeriodUpdate(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    reason: Optional[str] = None
+
+
+class WFHPeriodResponse(BaseModel):
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    employee_team: Optional[str] = None
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class WFHPeriodListResponse(BaseModel):
+    periods: List[WFHPeriodResponse]
+    total: int
+    page: int
+    page_size: int

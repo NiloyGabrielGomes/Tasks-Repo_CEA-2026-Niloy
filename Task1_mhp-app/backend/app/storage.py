@@ -6,7 +6,7 @@ from app.models import (
     User, MealParticipation, MealType, WorkLocation, WorkLocationType,
     SpecialDay, DayType, create_default_participation,
     ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS,
-    Announcement, AnnouncementStatus,
+    Announcement, AnnouncementStatus, WFHPeriod,
 )
 from app import utils
 import json
@@ -629,3 +629,110 @@ def publish_announcement(
         session.commit()
         session.refresh(ann)
         return ann
+
+
+# ===========================
+# WFH Period Operations
+# ===========================
+
+def _periods_overlap(a_start: date, a_end: date, b_start: date, b_end: date) -> bool:
+    return a_start <= b_end and a_end >= b_start
+
+
+def get_overlapping_wfh_periods(
+    employee_id: str,
+    start_date: date,
+    end_date: date,
+    exclude_id: str | None = None,
+) -> List[WFHPeriod]:
+    with Session(engine) as session:
+        stmt = select(WFHPeriod).where(
+            WFHPeriod.employee_id == employee_id,
+            WFHPeriod.start_date <= end_date,
+            WFHPeriod.end_date >= start_date,
+        )
+        if exclude_id:
+            stmt = stmt.where(WFHPeriod.id != exclude_id)
+        return session.exec(stmt).all()
+
+
+def create_wfh_period(period: WFHPeriod) -> WFHPeriod:
+    with Session(engine) as session:
+        session.add(period)
+        session.commit()
+        session.refresh(period)
+        return period
+
+
+def get_wfh_period_by_id(period_id: str) -> Optional[WFHPeriod]:
+    with Session(engine) as session:
+        return session.get(WFHPeriod, period_id)
+
+
+def get_wfh_periods(
+    employee_id: str | None = None,
+    team: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[List[WFHPeriod], int]:
+
+    with Session(engine) as session:
+        stmt = select(WFHPeriod)
+
+        if employee_id:
+            stmt = stmt.where(WFHPeriod.employee_id == employee_id)
+
+        if team:
+            # Only include periods whose employee belongs to the given team
+            user_ids_in_team = [
+                u.id for u in session.exec(
+                    select(User).where(User.team == team)
+                ).all()
+            ]
+            stmt = stmt.where(col(WFHPeriod.employee_id).in_(user_ids_in_team))
+
+        if start_date:
+            stmt = stmt.where(WFHPeriod.end_date >= start_date)
+
+        if end_date:
+            stmt = stmt.where(WFHPeriod.start_date <= end_date)
+
+        all_results = session.exec(stmt.order_by(WFHPeriod.start_date)).all()
+        total = len(all_results)
+        offset = (page - 1) * page_size
+        return all_results[offset: offset + page_size], total
+
+
+def update_wfh_period(
+    period_id: str,
+    start_date: date | None,
+    end_date: date | None,
+    reason: str | None,
+) -> Optional[WFHPeriod]:
+    with Session(engine) as session:
+        period = session.get(WFHPeriod, period_id)
+        if not period:
+            return None
+        if start_date is not None:
+            period.start_date = start_date
+        if end_date is not None:
+            period.end_date = end_date
+        if reason is not None:
+            period.reason = reason
+        period.updated_at = datetime.utcnow()
+        session.add(period)
+        session.commit()
+        session.refresh(period)
+        return period
+
+
+def delete_wfh_period(period_id: str) -> bool:
+    with Session(engine) as session:
+        period = session.get(WFHPeriod, period_id)
+        if not period:
+            return False
+        session.delete(period)
+        session.commit()
+        return True
