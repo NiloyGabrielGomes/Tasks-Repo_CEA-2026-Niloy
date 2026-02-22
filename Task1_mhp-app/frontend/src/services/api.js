@@ -260,8 +260,12 @@ export const wfhPeriodsAPI = {
 // ===========================
 
 export const sseAPI = {
-  getStreamUrl: (date = null) => {
-    const token = localStorage.getItem('access_token');
+  /** Fetch a short-lived (60 s), single-use token for the SSE stream. */
+  getSseToken: () => api.get('/api/auth/sse-token').then((r) => r.data),
+
+  /** Build the SSE stream URL after obtaining a fresh token. */
+  getStreamUrl: async (date = null) => {
+    const { token } = await sseAPI.getSseToken();
     let url = `${API_BASE_URL}/api/stream/headcount?token=${encodeURIComponent(token)}`;
     if (date) url += `&date=${encodeURIComponent(date)}`;
     return url;
