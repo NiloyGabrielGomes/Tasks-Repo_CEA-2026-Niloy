@@ -4,6 +4,7 @@ import { workLocationsAPI } from "../services/api";
 export default function WorkLocationSelector({
   date = null,
   onChange = null,
+  onLoad = null,
   disabled = false,
 }) {
   const [location, setLocation] = useState("Office");
@@ -17,9 +18,12 @@ export default function WorkLocationSelector({
     const fetchLocation = async () => {
       try {
         const res = await workLocationsAPI.getMine(targetDate);
-        if (res.data?.location) setLocation(res.data.location);
+        const loc = res.data?.location || "Office";
+        setLocation(loc);
+        if (onLoad) onLoad(loc);
       } catch {
         setLocation("Office");
+        if (onLoad) onLoad("Office");
       } finally {
         setLoaded(true);
       }
