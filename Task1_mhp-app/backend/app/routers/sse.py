@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query, HTTPException, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth import get_user_from_token
-from app.event_bus import wait_for_change, get_last_change_timestamp
+from app.event_bus import wait_for_change, get_last_change_timestamp, wait_for_announcement
 from app.storage import get_all_participation, get_enabled_meals, get_all_users
 
 router = APIRouter(prefix="/api/stream", tags=["SSE"])
@@ -104,15 +104,37 @@ async def headcount_stream(
             if await request.is_disconnected():
                 break
 
-            changed = await wait_for_change(timeout=30.0)
+            # Wait for whichever event fires first (headcount change OR announcement)
+            headcount_task = asyncio.create_task(wait_for_change(timeout=30.0))
+            announcement_task = asyncio.create_task(wait_for_announcement(timeout=30.0))
 
-            if changed:
+            done, pending = await asyncio.wait(
+                {headcount_task, announcement_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            if headcount_task in done and headcount_task.result():
                 payload = _build_headcount_payload(date)
                 yield {
                     "event": "headcount",
                     "data": json.dumps(payload),
                 }
-            else:
+
+            ann_data = announcement_task.result() if announcement_task in done else None
+            if ann_data:
+                yield {
+                    "event": "announcement",
+                    "data": json.dumps(ann_data),
+                }
+
+            if not headcount_task.result() and not ann_data:
                 yield {
                     "event": "heartbeat",
                     "data": "",
