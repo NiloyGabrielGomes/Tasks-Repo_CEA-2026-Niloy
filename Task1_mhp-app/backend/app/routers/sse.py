@@ -1,6 +1,5 @@
 import json
 import asyncio
-import logging
 from fastapi import APIRouter, Query, HTTPException, Request, status
 from sse_starlette.sse import EventSourceResponse
 
@@ -11,8 +10,6 @@ from app.event_bus import (
     register_announcement_client, unregister_announcement_client
 )
 from app.storage import get_all_participation, get_enabled_meals, get_all_users, get_work_locations_by_date
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/stream", tags=["SSE"])
 
@@ -106,11 +103,9 @@ async def headcount_stream(
         
         hc_event = register_headcount_client()
         ann_event = register_announcement_client()
-        logger.info(f"SSE client connected, date={date}")
 
         try:
             payload = _build_headcount_payload(date)
-            logger.info(f"SSE initial payload: participating={payload.get('total_participating')}, ts={payload.get('timestamp')}")
             yield {
                 "event": "headcount",
                 "data": json.dumps(payload),
@@ -118,7 +113,6 @@ async def headcount_stream(
 
             while True:
                 if await request.is_disconnected():
-                    logger.info("SSE client disconnected")
                     break
 
                 # Wait for whichever event fires first (headcount change OR announcement)
@@ -142,7 +136,6 @@ async def headcount_stream(
 
                 if headcount_changed:
                     payload = _build_headcount_payload(date)
-                    logger.info(f"SSE headcount update: participating={payload.get('total_participating')}, ts={payload.get('timestamp')}")
                     yield {
                         "event": "headcount",
                         "data": json.dumps(payload),
@@ -159,11 +152,8 @@ async def headcount_stream(
                         "event": "heartbeat",
                         "data": "",
                     }
-        except Exception as exc:
-            logger.error(f"SSE generator error: {exc}", exc_info=True)
         finally:
             unregister_headcount_client(hc_event)
             unregister_announcement_client(ann_event)
-            logger.info("SSE client unregistered")
 
     return EventSourceResponse(event_generator())

@@ -1,9 +1,7 @@
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import Optional, Set
-
-logger = logging.getLogger(__name__)
+import weakref
 
 # ── Internal State ──────────────────────────────────────────────
 
@@ -22,8 +20,6 @@ def notify_headcount_change() -> None:
     """
     global _last_change_timestamp
     _last_change_timestamp = datetime.now(timezone.utc).isoformat()
-    num_clients = len(_headcount_events)
-    logger.info(f"notify_headcount_change: ts={_last_change_timestamp}, clients={num_clients}")
     for event in list(_headcount_events):
         event.set()
 
