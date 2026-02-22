@@ -1,11 +1,18 @@
 import json
 import asyncio
+import logging
 from fastapi import APIRouter, Query, HTTPException, Request, status
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth import get_user_from_token
-from app.event_bus import wait_for_change, get_last_change_timestamp, wait_for_announcement
-from app.storage import get_all_participation, get_enabled_meals, get_all_users
+from app.event_bus import (
+    wait_for_change, get_last_change_timestamp, wait_for_announcement,
+    register_headcount_client, unregister_headcount_client,
+    register_announcement_client, unregister_announcement_client
+)
+from app.storage import get_all_participation, get_enabled_meals, get_all_users, get_work_locations_by_date
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/stream", tags=["SSE"])
 
@@ -16,11 +23,14 @@ def _build_headcount_payload(date_str: str | None = None) -> dict:
     from datetime import date as date_cls
 
     target_date = date_str or date_cls.today().isoformat()
+    target_date_obj = date_cls.fromisoformat(target_date)
     participations = get_all_participation()
     users = get_all_users()
     config = get_enabled_meals()
+    work_locations = get_work_locations_by_date(target_date_obj)
 
     user_map = {u.id: u for u in users}
+    location_map = {wl.user_id: wl.location.value if hasattr(wl.location, 'value') else str(wl.location) for wl in work_locations}
 
     day_records = []
     for p in participations:
@@ -42,7 +52,7 @@ def _build_headcount_payload(date_str: str | None = None) -> dict:
     for record in day_records:
         user = user_map.get(record.user_id)
         team = user.team if user and user.team else "Unknown"
-        location = getattr(record, "work_location", "Office") or "Office"
+        location = location_map.get(record.user_id, "Office")
         meal_name = record.meal_type.value if hasattr(record.meal_type, 'value') else str(record.meal_type)
 
         if meal_name not in meal_totals:
@@ -93,51 +103,67 @@ async def headcount_stream(
 
     async def event_generator():
         """Yields SSE events until the client disconnects."""
+        
+        hc_event = register_headcount_client()
+        ann_event = register_announcement_client()
+        logger.info(f"SSE client connected, date={date}")
 
-        payload = _build_headcount_payload(date)
-        yield {
-            "event": "headcount",
-            "data": json.dumps(payload),
-        }
+        try:
+            payload = _build_headcount_payload(date)
+            logger.info(f"SSE initial payload: participating={payload.get('total_participating')}, ts={payload.get('timestamp')}")
+            yield {
+                "event": "headcount",
+                "data": json.dumps(payload),
+            }
 
-        while True:
-            if await request.is_disconnected():
-                break
+            while True:
+                if await request.is_disconnected():
+                    logger.info("SSE client disconnected")
+                    break
 
-            # Wait for whichever event fires first (headcount change OR announcement)
-            headcount_task = asyncio.create_task(wait_for_change(timeout=30.0))
-            announcement_task = asyncio.create_task(wait_for_announcement(timeout=30.0))
+                # Wait for whichever event fires first (headcount change OR announcement)
+                headcount_task = asyncio.create_task(wait_for_change(hc_event, timeout=30.0))
+                announcement_task = asyncio.create_task(wait_for_announcement(ann_event, timeout=30.0))
 
-            done, pending = await asyncio.wait(
-                {headcount_task, announcement_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
+                done, pending = await asyncio.wait(
+                    {headcount_task, announcement_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
 
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+                headcount_changed = headcount_task in done and headcount_task.result() is True
+                ann_data = announcement_task.result() if announcement_task in done else None
 
-            if headcount_task in done and headcount_task.result():
-                payload = _build_headcount_payload(date)
-                yield {
-                    "event": "headcount",
-                    "data": json.dumps(payload),
-                }
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
 
-            ann_data = announcement_task.result() if announcement_task in done else None
-            if ann_data:
-                yield {
-                    "event": "announcement",
-                    "data": json.dumps(ann_data),
-                }
+                if headcount_changed:
+                    payload = _build_headcount_payload(date)
+                    logger.info(f"SSE headcount update: participating={payload.get('total_participating')}, ts={payload.get('timestamp')}")
+                    yield {
+                        "event": "headcount",
+                        "data": json.dumps(payload),
+                    }
 
-            if not headcount_task.result() and not ann_data:
-                yield {
-                    "event": "heartbeat",
-                    "data": "",
-                }
+                if ann_data:
+                    yield {
+                        "event": "announcement",
+                        "data": json.dumps(ann_data),
+                    }
+
+                if not headcount_changed and not ann_data:
+                    yield {
+                        "event": "heartbeat",
+                        "data": "",
+                    }
+        except Exception as exc:
+            logger.error(f"SSE generator error: {exc}", exc_info=True)
+        finally:
+            unregister_headcount_client(hc_event)
+            unregister_announcement_client(ann_event)
+            logger.info("SSE client unregistered")
 
     return EventSourceResponse(event_generator())
