@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Depends, status
 from datetime import date, datetime
+from typing import Optional
 from app.models import User, UserRole, SpecialDay, DayType
 from app.auth import require_role
 from app import auth as auth_service
@@ -62,7 +63,7 @@ async def create_special_day(
 # Get Special Day by Date
 # ===========================
 
-@router.get("", response_model=SpecialDayResponse)
+@router.get("", response_model=Optional[SpecialDayResponse])
 async def get_special_day(
     target_date: date = Query(..., alias="date", description="Date in YYYY-MM-DD"),
     current_user: User = Depends(auth_service.get_current_user),
@@ -70,10 +71,7 @@ async def get_special_day(
 
     sd = storage.get_special_day_by_date(target_date)
     if sd is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No special day found for {target_date.isoformat()}",
-        )
+        return None
     return sd
 
 

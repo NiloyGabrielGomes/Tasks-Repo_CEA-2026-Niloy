@@ -68,7 +68,7 @@ async def get_my_work_location(
             date=day.isoformat(),
             location=WorkLocationType.OFFICE.value,
             updated_by=None,
-            updated_at="",
+            updated_at=None,
         )
     return _to_response(wl)
 
