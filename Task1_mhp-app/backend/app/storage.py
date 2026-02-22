@@ -3,9 +3,10 @@ from typing import Optional, Dict, List
 from sqlmodel import Session, select, col
 from app.database import engine
 from app.models import (
-    User, MealParticipation, MealType, WorkLocation, WorkLocationType, 
-    SpecialDay, DayType, create_default_participation, 
-    ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS
+    User, MealParticipation, MealType, WorkLocation, WorkLocationType,
+    SpecialDay, DayType, create_default_participation,
+    ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS,
+    Announcement, AnnouncementStatus,
 )
 from app import utils
 import json
@@ -566,3 +567,65 @@ def is_participation_blocked(target_date: date) -> tuple[bool, str | None]:
         return True, reason
 
     return False, None
+
+
+# ===========================
+# Announcement Operations 
+# ===========================
+
+def create_announcement(announcement: Announcement) -> Announcement:
+    with Session(engine) as session:
+        session.add(announcement)
+        session.commit()
+        session.refresh(announcement)
+        return announcement
+
+
+def get_announcement_by_id(announcement_id: str) -> Optional[Announcement]:
+    with Session(engine) as session:
+        return session.get(Announcement, announcement_id)
+
+
+def get_announcements(
+    created_by: str,
+    status_filter: Optional[str] = None,
+) -> List[Announcement]:
+
+    with Session(engine) as session:
+        stmt = select(Announcement).where(Announcement.created_by == created_by)
+        if status_filter:
+            try:
+                status_enum = AnnouncementStatus(status_filter)
+                stmt = stmt.where(Announcement.status == status_enum)
+            except ValueError:
+                pass  # unknown status → return unfiltered
+        stmt = stmt.order_by(col(Announcement.created_at).desc())
+        return session.exec(stmt).all()
+
+
+def publish_announcement(
+    announcement_id: str,
+    scheduled_at: Optional[datetime] = None,
+) -> Optional[Announcement]:
+
+    with Session(engine) as session:
+        ann = session.get(Announcement, announcement_id)
+        if not ann:
+            return None
+        if ann.status == AnnouncementStatus.SENT:
+            return ann  # idempotent — already sent
+
+        now = datetime.utcnow()
+        if scheduled_at and scheduled_at > now:
+            ann.status = AnnouncementStatus.SCHEDULED
+            ann.scheduled_at = scheduled_at
+        else:
+            ann.status = AnnouncementStatus.SENT
+            ann.published_at = now
+            ann.scheduled_at = None
+
+        ann.updated_at = now
+        session.add(ann)
+        session.commit()
+        session.refresh(ann)
+        return ann
