@@ -72,7 +72,7 @@ export default function MealCard({ meal, onToggle, disabled }) {
             checked={isOn}
             readOnly
             disabled={disabled}
-            className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-transparent appearance-none cursor-pointer hidden"
+            className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-transparent appearance-none cursor-pointer"
           />
           <label
             className={`toggle-label block overflow-hidden h-6 rounded-full transition-colors duration-200 ${

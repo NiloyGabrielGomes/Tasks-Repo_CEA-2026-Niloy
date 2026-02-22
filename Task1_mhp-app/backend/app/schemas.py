@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
-from app.models import UserRole, MealType
+from app.models import UserRole, MealType, WorkLocationType
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -464,5 +464,103 @@ class ErrorResponse(BaseModel):
                 "detail": "Invalid credentials",
                 "error_code": "AUTH_ERROR",
                 "timestamp": "2026-02-06T10:30:00"
+            }
+        }
+
+
+# ===========================
+# Work Location Schemas
+# ===========================
+
+class WorkLocationUpdate(BaseModel):
+    """Request to set a user's work location for a date."""
+    date: date
+    location: WorkLocationType
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-02-19",
+                "location": "Office"
+            }
+        }
+
+
+class AdminWorkLocationUpdate(BaseModel):
+    """Admin request to set any user's work location."""
+    user_id: str
+    date: date
+    location: WorkLocationType
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_id": "user-1",
+                "date": "2026-02-19",
+                "location": "WFH"
+            }
+        }
+
+
+class WorkLocationResponse(BaseModel):
+    id: str
+    user_id: str
+    date: str
+    location: str
+    updated_by: Optional[str] = None
+    updated_at: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "wl-001",
+                "user_id": "user-1",
+                "date": "2026-02-19",
+                "location": "Office",
+                "updated_by": "user-1",
+                "updated_at": "2026-02-19T08:00:00"
+            }
+        }
+
+
+class WorkLocationListResponse(BaseModel):
+    date: str
+    locations: List[WorkLocationResponse]
+    total: int
+
+
+# ===========================
+# Team Participation Schemas
+# ===========================
+
+class TeamMemberParticipation(BaseModel):
+    user_id: str
+    user_name: str
+    email: str
+    work_location: str = "Office"
+    meals: Dict[str, bool] = {}
+
+
+class TeamParticipationResponse(BaseModel):
+    team: str
+    date: str
+    members: List[TeamMemberParticipation]
+    total_members: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "team": "Engineering",
+                "date": "2026-02-19",
+                "members": [
+                    {
+                        "user_id": "user-1",
+                        "user_name": "John Doe",
+                        "email": "john@company.com",
+                        "work_location": "Office",
+                        "meals": {"lunch": True, "snacks": False}
+                    }
+                ],
+                "total_members": 1
             }
         }

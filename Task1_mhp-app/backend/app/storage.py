@@ -3,12 +3,13 @@ import os
 from datetime import date, datetime
 from typing import Optional, Dict, List
 from pathlib import Path
-from app.models import User, MealParticipation, MealType, create_default_participation, ADMIN_CONTROLLED_MEALS
+from app.models import User, MealParticipation, MealType, WorkLocation, WorkLocationType, create_default_participation, ADMIN_CONTROLLED_MEALS
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 USERS_FILE = DATA_DIR / "users.json"
 PARTICIPATION_FILE = DATA_DIR / "meal_participation.json"
 MEAL_CONFIG_FILE = DATA_DIR / "meal_config.json"
+WORK_LOCATIONS_FILE = DATA_DIR / "work_locations.json"
 
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -227,6 +228,120 @@ def initialize_daily_participation(target_date: date) -> None:
         for record in defaults:
             if (record.user_id, record.meal_type.value) not in existing_keys:
                 create_participation(record)
+
+
+# ===========================
+# Work Location Operations
+# ===========================
+
+def _load_work_locations() -> List[dict]:
+    data = _load_json(WORK_LOCATIONS_FILE)
+    return data.get("locations", [])
+
+
+def _save_work_locations(locations: List[dict]) -> None:
+    _save_json(WORK_LOCATIONS_FILE, {"locations": locations})
+
+
+def get_work_location(user_id: str, target_date: date) -> Optional[WorkLocation]:
+    """Get a user's work location for a specific date."""
+    locations = _load_work_locations()
+    for loc in locations:
+        loc_date = loc.get("date")
+        if isinstance(loc_date, str):
+            loc_date = datetime.fromisoformat(loc_date).date()
+        if loc["user_id"] == user_id and loc_date == target_date:
+            loc["date"] = loc_date
+            if isinstance(loc.get("updated_at"), str):
+                loc["updated_at"] = datetime.fromisoformat(loc["updated_at"])
+            return WorkLocation(**loc)
+    return None
+
+
+def set_work_location(
+    user_id: str,
+    target_date: date,
+    location: WorkLocationType,
+    updated_by: str
+) -> WorkLocation:
+    locations = _load_work_locations()
+    now = datetime.now()
+
+    for loc in locations:
+        loc_date = loc.get("date")
+        if isinstance(loc_date, str):
+            loc_date = datetime.fromisoformat(loc_date).date()
+        if loc["user_id"] == user_id and loc_date == target_date:
+            loc["location"] = location.value
+            loc["updated_by"] = updated_by
+            loc["updated_at"] = now.isoformat()
+            _save_work_locations(locations)
+            loc["date"] = loc_date
+            loc["updated_at"] = now
+            return WorkLocation(**loc)
+
+    new_loc = WorkLocation(
+        user_id=user_id,
+        date=target_date,
+        location=location,
+        updated_by=updated_by,
+        updated_at=now,
+    )
+    locations.append(new_loc.model_dump(mode="json"))
+    _save_work_locations(locations)
+    return new_loc
+
+
+def get_work_locations_by_date(target_date: date) -> List[WorkLocation]:
+    locations = _load_work_locations()
+    results = []
+    for loc in locations:
+        loc_date = loc.get("date")
+        if isinstance(loc_date, str):
+            loc_date = datetime.fromisoformat(loc_date).date()
+        if loc_date == target_date:
+            loc["date"] = loc_date
+            if isinstance(loc.get("updated_at"), str):
+                loc["updated_at"] = datetime.fromisoformat(loc["updated_at"])
+            results.append(WorkLocation(**loc))
+    return results
+
+
+def get_team_participation(team: str, target_date: date) -> List[dict]:
+
+    team_users = get_users_by_team(team)
+    participation_records = get_participation_by_date(target_date)
+    work_locations = get_work_locations_by_date(target_date)
+    enabled_types = get_enabled_meal_types()
+
+    user_participation: Dict[str, Dict[str, bool]] = {}
+    for p in participation_records:
+        if p.meal_type.value in [mt.value if hasattr(mt, 'value') else mt for mt in enabled_types]:
+            user_participation.setdefault(p.user_id, {})[p.meal_type.value] = p.is_participating
+
+    user_locations: Dict[str, str] = {}
+    for wl in work_locations:
+        user_locations[wl.user_id] = wl.location.value if hasattr(wl.location, 'value') else wl.location
+
+    result = []
+    for user in team_users:
+        if not user.is_active:
+            continue
+        result.append({
+            "user_id": user.id,
+            "user_name": user.name,
+            "email": user.email,
+            "work_location": user_locations.get(user.id, "Office"),
+            "meals": user_participation.get(user.id, {}),
+        })
+
+    return result
+
+
+def get_all_teams() -> List[str]:
+    users = get_all_users()
+    teams = {u.team for u in users if u.team}
+    return sorted(teams)
 
 # ===========================
 # Meal Configuration (Admin-controlled meal types)
