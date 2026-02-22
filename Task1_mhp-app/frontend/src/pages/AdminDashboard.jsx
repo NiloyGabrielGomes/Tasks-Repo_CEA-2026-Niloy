@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { mealsAPI, usersAPI, specialDaysAPI } from '../services/api';
+import useHeadcountStream from '../hooks/useHeadcountStream';
 import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
 import SpecialDayBanner from '../components/SpecialDayBanner';
@@ -29,9 +30,13 @@ export default function AdminDashboard() {
   const [headcount, setHeadcount] = useState(null);
   const [users, setUsers] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -66,6 +71,19 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [specialDay, setSpecialDay] = useState(null);
+
+  // ── SSE live headcount ───────────────────────────────────────
+  const { headcount: liveData } = useHeadcountStream(selectedDate);
+
+  useEffect(() => {
+    if (!liveData?.meals) return;
+
+    const headcountFlat = Object.fromEntries(
+      Object.entries(liveData.meals).map(([k, v]) => [k, v.opted_in ?? 0])
+    );
+    setHeadcount(headcountFlat);
+    setTotalUsers(liveData.total_users);
+  }, [liveData]);
 
   // Meal configuration state
   const [mealConfig, setMealConfig] = useState({});
@@ -233,11 +251,12 @@ export default function AdminDashboard() {
         )
       );
       setSuccess(`Participation updated for ${participationUser.name}.`);
-      // Refresh headcount
-      const today = new Date().toISOString().split('T')[0];
-      if (selectedDate === today) {
+      // Refresh headcount immediately via REST (SSE will also deliver update)
+      try {
         const hcRes = await mealsAPI.getTodayHeadcount();
         setHeadcount(hcRes.data.headcount);
+      } catch (_hcErr) {
+        // SSE will handle the update if REST refresh fails
       }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to update participation.');
@@ -337,7 +356,7 @@ export default function AdminDashboard() {
 
         {/* Headcount Summary */}
         <div className="mb-10">
-          <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} />
+          <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} refreshKey={liveData?.timestamp} />
         </div>
 
         {/* Meal Configuration */}
