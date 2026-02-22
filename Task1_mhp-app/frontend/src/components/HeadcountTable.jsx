@@ -103,7 +103,7 @@ function MealsPanel({ headcount, totalUsers }) {
   );
 }
 
-function TeamPanel({ date }) {
+function TeamPanel({ date, refreshKey }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -122,7 +122,8 @@ function TeamPanel({ date }) {
     }
   };
 
-  useEffect(() => { fetchData(); }, [date]);
+  // Re-fetch when date changes OR when a live SSE update arrives (refreshKey)
+  useEffect(() => { fetchData(); }, [date, refreshKey]);
 
   const toggleTeam = (team) =>
     setExpanded((prev) => {
@@ -236,7 +237,7 @@ function TeamPanel({ date }) {
   );
 }
 
-function LocationPanel({ date }) {
+function LocationPanel({ date, refreshKey }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -255,7 +256,8 @@ function LocationPanel({ date }) {
     }
   };
 
-  useEffect(() => { fetchData(); }, [date]);
+  // Re-fetch when date changes OR when a live SSE update arrives (refreshKey)
+  useEffect(() => { fetchData(); }, [date, refreshKey]);
 
   const toggleLocation = (loc) =>
     setExpanded((prev) => {
@@ -371,7 +373,7 @@ function LocationPanel({ date }) {
 
 // ── main export ───────────────────────────────────────────────────────────────
 
-export default function HeadcountTable({ headcount, totalUsers, date }) {
+export default function HeadcountTable({ headcount, totalUsers, date, refreshKey }) {
   const [activeTab, setActiveTab] = useState('meals');
   const resolvedDate = date || new Date().toISOString().split('T')[0];
 
@@ -387,8 +389,8 @@ export default function HeadcountTable({ headcount, totalUsers, date }) {
       {activeTab === 'meals' && (
         <MealsPanel headcount={headcount} totalUsers={totalUsers} />
       )}
-      {activeTab === 'team' && <TeamPanel date={resolvedDate} />}
-      {activeTab === 'location' && <LocationPanel date={resolvedDate} />}
+      {activeTab === 'team' && <TeamPanel date={resolvedDate} refreshKey={refreshKey} />}
+      {activeTab === 'location' && <LocationPanel date={resolvedDate} refreshKey={refreshKey} />}
     </section>
   );
 }
