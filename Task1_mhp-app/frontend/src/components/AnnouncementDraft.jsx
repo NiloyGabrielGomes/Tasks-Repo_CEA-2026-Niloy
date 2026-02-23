@@ -37,6 +37,7 @@ function CreateForm({ onCreated }) {
   const [scheduledAt, setScheduledAt]   = useState('');
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState('');
+  const [expiry, setExpiry]         = useState('');
 
   const reset = () => {
     setTitle('');
@@ -45,6 +46,7 @@ function CreateForm({ onCreated }) {
     setScheduleMode(false);
     setScheduledAt('');
     setError('');
+    setExpiry('');
   };
 
   const handleSave = async () => {
@@ -60,6 +62,7 @@ function CreateForm({ onCreated }) {
         body.trim(),
         audience,
         null,
+        expiry || null,
       );
       reset();
       setOpen(false);
@@ -202,6 +205,22 @@ function CreateForm({ onCreated }) {
             )}
           </div>
 
+          {/* Expiry field */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+              Expiry (optional)
+            </label>
+            <input
+              type="datetime-local"
+              value={expiry}
+              onChange={(e) => setExpiry(e.target.value)}
+              min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+              className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary dark:text-white w-full sm:w-auto"
+              placeholder="Expiry date/time (optional)"
+            />
+            <span className="text-xs text-slate-400">If set, announcement will expire and disappear after this time.</span>
+          </div>
+
           {/* Actions */}
           <div className="flex gap-3 pt-1">
             {scheduleMode ? (
@@ -245,6 +264,19 @@ function DraftList({ refreshTrigger }) {
   const [error, setError]               = useState('');
   const [publishing, setPublishing]     = useState(null); // id of item being published
   const [expandedId, setExpandedId]     = useState(null);
+  const [deleting, setDeleting]         = useState(null); // id of item being deleted
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this announcement?')) return;
+    setDeleting(id);
+    try {
+      await announcementsAPI.delete(id);
+      fetchList();
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to delete.');
+    } finally {
+      setDeleting(null);
+    }
+  };
 
   const fetchList = useCallback(async () => {
     setLoading(true);
@@ -372,6 +404,16 @@ function DraftList({ refreshTrigger }) {
                     {publishing === item.id ? 'Sending…' : 'Publish Now'}
                   </button>
                 )}
+                {/* Delete button — always visible */}
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  disabled={deleting === item.id}
+                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg disabled:opacity-50 transition-colors ml-2"
+                  title="Delete announcement"
+                >
+                  <span className="material-icons-outlined text-[14px]">delete</span>
+                  {deleting === item.id ? 'Deleting…' : 'Delete'}
+                </button>
               </div>
 
               {/* Expanded body */}
