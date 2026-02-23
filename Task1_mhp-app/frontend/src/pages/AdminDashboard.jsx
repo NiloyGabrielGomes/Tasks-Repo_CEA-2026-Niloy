@@ -43,6 +43,40 @@ export default function AdminDashboard() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const [specialDay, setSpecialDay] = useState(null);
+  
+  // Global WFH State
+  const [globalWFHLoading, setGlobalWFHLoading] = useState(false);
+  const isGlobalWFH = specialDay?.day_type === 'global_wfh';
+
+  const toggleGlobalWFH = async () => {
+    if (globalWFHLoading) return;
+    setGlobalWFHLoading(true);
+    try {
+      if (isGlobalWFH) {
+        // Delete special day to disable Global WFH
+        await specialDaysAPI.delete(specialDay.id);
+        setSpecialDay(null);
+        setSuccess('Global Work From Home disabled.');
+      } else {
+        // Enable Global WFH
+        // Note: Backend DayType must support 'global_wfh'
+        const res = await specialDaysAPI.create(
+          selectedDate,
+          'global_wfh',
+          'Global Work From Home enforced by Admin.'
+        );
+        setSpecialDay(res.data);
+        setSuccess('Global Work From Home enabled for this date.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Failed to toggle Global WFH.');
+    } finally {
+      setGlobalWFHLoading(false);
+    }
+  };
+
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -71,8 +105,6 @@ export default function AdminDashboard() {
 
   // Search/filter
   const [searchQuery, setSearchQuery] = useState('');
-
-  const [specialDay, setSpecialDay] = useState(null);
 
   // ── SSE live headcount ───────────────────────────────────────
   const { headcount: liveData } = useHeadcountStream(selectedDate);
@@ -297,6 +329,30 @@ export default function AdminDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-4">
+            {/* Global WFH Toggle */}
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-semibold uppercase tracking-wider ${isGlobalWFH ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                Global WFH
+              </span>
+              <button
+                onClick={toggleGlobalWFH}
+                disabled={globalWFHLoading || (specialDay && !isGlobalWFH)}
+                title={specialDay && !isGlobalWFH ? "Cannot enable WFH on an existing Special Day/Holiday" : "Toggle Global WFH for everyone"}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  isGlobalWFH ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
+                } ${globalWFHLoading || (specialDay && !isGlobalWFH) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    isGlobalWFH ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
+
             <input
               type="date"
               value={selectedDate}
