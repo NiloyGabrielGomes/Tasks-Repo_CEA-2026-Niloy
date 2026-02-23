@@ -1,12 +1,13 @@
-from datetime import date as dt_date
+from datetime import date as dt_date, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, status
 
-from app.models import User, UserRole, WFHPeriod
+from app.models import User, UserRole, WFHPeriod, WorkLocationType
 from app.auth import require_role
 from app import auth as auth_service
 from app import storage
+from app.event_bus import notify_headcount_change
 from app.schemas import (
     WFHPeriodCreate,
     WFHPeriodUpdate,
@@ -113,6 +114,21 @@ async def create_wfh_period(
         created_by=current_user.id,
     )
     saved = storage.create_wfh_period(period)
+    
+    # Automatically set WorkLocation to WFH for each day in the period (Soft Opt Out)
+    curr_date = body.start_date
+    while curr_date <= body.end_date:
+        # Check if Global WFH is active? No, we proceed with setting WFH.
+        storage.set_work_location(
+            user_id=body.employee_id,
+            target_date=curr_date,
+            location=WorkLocationType.WFH,
+            updated_by=current_user.id
+        )
+        curr_date += timedelta(days=1)
+        
+    notify_headcount_change()
+
     return _to_response(saved, employee)
 
 
