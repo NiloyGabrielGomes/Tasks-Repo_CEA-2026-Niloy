@@ -100,6 +100,13 @@ export const mealsAPI = {
 
   setException: (data) =>
     api.post('/api/meals/participation/exception', data),
+
+  setRange: ({ startDate, endDate, meals }) =>
+    api.post('/api/meals/participation/range', {
+      start_date: startDate,
+      end_date: endDate,
+      meals,
+    }),
 };
 
 // ===========================
@@ -201,12 +208,13 @@ export const headcountAPI = {
 // ===========================
 
 export const announcementsAPI = {
-  createDraft: (title, body, audience, scheduledAt = null) =>
+  createDraft: (title, body, audience, scheduledAt = null, expiry = null) =>
     api.post('/api/announcements/draft', {
       title,
       body,
       audience,
       ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+      ...(expiry ? { expiry } : {}),
     }),
 
   list: (statusFilter = null) =>
@@ -218,6 +226,12 @@ export const announcementsAPI = {
     api.post(`/api/announcements/${id}/publish`, {
       ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
     }),
+
+  /** Fetch published announcements visible to the current user */
+  getPublished: () => api.get('/api/announcements/published'),
+
+  /** Delete an announcement by ID */
+  delete: (id) => api.delete(`/api/announcements/${id}`),
 };
 
 // ===========================
