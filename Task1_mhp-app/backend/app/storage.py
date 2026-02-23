@@ -7,6 +7,7 @@ from app.models import (
     SpecialDay, DayType, create_default_participation,
     ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS,
     Announcement, AnnouncementStatus, WFHPeriod,
+    ScheduledMealPreference,
 )
 from app import utils
 import json
@@ -530,6 +531,11 @@ def get_special_day_by_date(target_date: date) -> Optional[SpecialDay]:
         return session.exec(statement).first()
 
 
+def get_special_day_by_id(special_day_id: str) -> Optional[SpecialDay]:
+    with Session(engine) as session:
+        return session.get(SpecialDay, special_day_id)
+
+
 def get_special_days_range(start_date: date, end_date: date) -> List[SpecialDay]:
     with Session(engine) as session:
         statement = select(SpecialDay).where(
@@ -559,8 +565,11 @@ def is_participation_blocked(target_date: date) -> tuple[bool, str | None]:
     # Handle Enum value or object
     day_type_val = day_type.value if hasattr(day_type, "value") else str(day_type)
 
-    if day_type_val in (DayType.OFFICE_CLOSED.value, DayType.GOVERNMENT_HOLIDAY.value):
+    if day_type_val in (DayType.OFFICE_CLOSED.value, DayType.GOVERNMENT_HOLIDAY.value, DayType.GLOBAL_WFH.value):
         label = "Office Closed" if day_type_val == DayType.OFFICE_CLOSED.value else "Government Holiday"
+        if day_type_val == DayType.GLOBAL_WFH.value:
+            label = "Global Work From Home"
+
         reason = f"Meal participation is not available: {label}"
         if sd.note:
             reason += f" — {sd.note}"
@@ -579,6 +588,16 @@ def create_announcement(announcement: Announcement) -> Announcement:
         session.commit()
         session.refresh(announcement)
         return announcement
+
+def delete_announcement(announcement_id: str) -> bool:
+    """Delete an announcement by its ID. Returns True if deleted, False if not found."""
+    with Session(engine) as session:
+        ann = session.get(Announcement, announcement_id)
+        if not ann:
+            return False
+        session.delete(ann)
+        session.commit()
+        return True
 
 
 def get_announcement_by_id(announcement_id: str) -> Optional[Announcement]:
@@ -629,6 +648,16 @@ def publish_announcement(
         session.commit()
         session.refresh(ann)
         return ann
+
+
+def get_published_announcements() -> List[Announcement]:
+    with Session(engine) as session:
+        stmt = (
+            select(Announcement)
+            .where(Announcement.status == AnnouncementStatus.SENT)
+            .order_by(col(Announcement.published_at).desc())
+        )
+        return session.exec(stmt).all()
 
 
 # ===========================
@@ -736,3 +765,57 @@ def delete_wfh_period(period_id: str) -> bool:
         session.delete(period)
         session.commit()
         return True
+
+
+# ===========================
+# Scheduled Meal Preferences
+# ===========================
+
+def save_scheduled_meal_preferences(
+    user_id: str,
+    target_date: date,
+    meals: dict[str, bool],
+) -> None:
+
+    with Session(engine) as session:
+        # Remove old scheduled prefs for this user+date
+        old = session.exec(
+            select(ScheduledMealPreference).where(
+                ScheduledMealPreference.user_id == user_id,
+                ScheduledMealPreference.date == target_date,
+            )
+        ).all()
+        for o in old:
+            session.delete(o)
+
+        # Insert new
+        for meal_key, participating in meals.items():
+            try:
+                meal_enum = MealType(meal_key)
+            except ValueError:
+                continue
+            session.add(ScheduledMealPreference(
+                user_id=user_id,
+                date=target_date,
+                meal_type=meal_enum,
+                is_participating=participating,
+            ))
+        session.commit()
+
+
+def get_scheduled_meal_preferences_by_date(
+    target_date: date,
+) -> dict[str, dict[str, bool]]:
+
+    with Session(engine) as session:
+        rows = session.exec(
+            select(ScheduledMealPreference).where(
+                ScheduledMealPreference.date == target_date,
+            )
+        ).all()
+
+    result: dict[str, dict[str, bool]] = {}
+    for r in rows:
+        mt = r.meal_type.value if hasattr(r.meal_type, 'value') else str(r.meal_type)
+        result.setdefault(r.user_id, {})[mt] = r.is_participating
+    return result
