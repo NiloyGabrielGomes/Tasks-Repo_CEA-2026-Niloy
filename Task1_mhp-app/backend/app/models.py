@@ -47,6 +47,7 @@ class MealParticipation(SQLModel, table=True):
     meal_type: MealType
     date: dt_date = Field(index=True)
     is_participating: bool = Field(default=True)
+    is_event_meal: bool = Field(default=False)
     updated_by: Optional[str] = Field(default=None)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     reason: Optional[str] = Field(default=None)
@@ -114,6 +115,45 @@ class ScheduledMealPreference(SQLModel, table=True):
     meal_type: MealType
     is_participating: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# ===========================
+# Models: Audit Logs, Event Meals, Policy Config
+# ===========================
+
+class EventMeal(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    date: dt_date = Field(index=True)
+    meal_type: str = Field(max_length=50)  # e.g. "EventDinner"
+    note: Optional[str] = Field(default=None, max_length=500)
+    created_by: str = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AuditLogEntry(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    actor_id: str = Field(foreign_key="user.id", index=True)
+    target_user_id: Optional[str] = Field(default=None, foreign_key="user.id", index=True)
+    action: str = Field(max_length=50, index=True)  # "create", "update", "delete"
+    entity_type: str = Field(max_length=50, index=True)  # "meal_participation", "work_location", "policy", "event_meal"
+    entity_id: Optional[str] = Field(default=None)
+    field_changed: Optional[str] = Field(default=None, max_length=100)
+    old_value: Optional[str] = Field(default=None)
+    new_value: Optional[str] = Field(default=None)
+    timestamp: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class PolicyConfig(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    cutoff_time: str = Field(default="21:00", max_length=5)  # HH:MM format
+    forward_planning_days: int = Field(default=7, ge=1)
+    wfh_monthly_allowance: int = Field(default=5, ge=1)
+    updated_by: Optional[str] = Field(default=None, foreign_key="user.id")
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ===========================
+# Constants
+# ===========================
 
 DEFAULT_OPTED_IN_MEALS = {
     MealType.LUNCH,
