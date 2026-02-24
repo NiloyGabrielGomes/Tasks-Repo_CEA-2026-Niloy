@@ -117,14 +117,27 @@ def update_participation(
         record = session.exec(statement).first()
         
         if record:
-            record.is_participating = is_participating
-            record.updated_by = updated_by
-            record.updated_at = datetime.utcnow()
-            if reason is not None:
-                record.reason = reason
-            session.add(record)
-            session.commit()
-            session.refresh(record)
+            old_participating = record.is_participating
+            if old_participating != is_participating:
+                record.is_participating = is_participating
+                record.updated_by = updated_by
+                record.updated_at = datetime.utcnow()
+                if reason is not None:
+                    record.reason = reason
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+                
+                create_audit_entry(
+                    actor_id=updated_by,
+                    target_user_id=user_id,
+                    action="update",
+                    entity_type="meal_participation",
+                    entity_id=record.id,
+                    field_changed=meal_type.value if hasattr(meal_type, "value") else str(meal_type),
+                    old_value=str(old_participating),
+                    new_value=str(is_participating)
+                )
             return record
         else:
             new_record = MealParticipation(
@@ -139,6 +152,16 @@ def update_participation(
             session.add(new_record)
             session.commit()
             session.refresh(new_record)
+            
+            create_audit_entry(
+                actor_id=updated_by,
+                target_user_id=user_id,
+                action="create",
+                entity_type="meal_participation",
+                entity_id=new_record.id,
+                field_changed=meal_type.value if hasattr(meal_type, "value") else str(meal_type),
+                new_value=str(is_participating)
+            )
             return new_record
 
 
@@ -152,6 +175,7 @@ def bulk_update_participation(
 
     succeeded = 0
     failed = []
+    audit_logs_to_create = []
     
     enabled = get_enabled_meal_types()
 
@@ -173,7 +197,6 @@ def bulk_update_participation(
                     failed.append({"user_id": uid, "error": f"{meal_key} is not enabled"})
                     continue
                 
-                # Update logic inline to reuse the session
                 statement = select(MealParticipation).where(
                     MealParticipation.user_id == uid,
                     MealParticipation.date == target_date,
@@ -182,12 +205,23 @@ def bulk_update_participation(
                 record = session.exec(statement).first()
                 
                 if record:
-                    record.is_participating = participating
-                    record.updated_by = updated_by
-                    record.updated_at = datetime.utcnow()
-                    if reason is not None:
-                        record.reason = reason
-                    session.add(record)
+                    old_participating = record.is_participating
+                    if old_participating != participating:
+                        record.is_participating = participating
+                        record.updated_by = updated_by
+                        record.updated_at = datetime.utcnow()
+                        if reason is not None:
+                            record.reason = reason
+                        session.add(record)
+                        
+                        audit_logs_to_create.append({
+                            "action": "update",
+                            "entity_id": record.id,
+                            "target_user_id": uid,
+                            "field_changed": meal_enum.value,
+                            "old_value": str(old_participating),
+                            "new_value": str(participating)
+                        })
                 else:
                     new_record = MealParticipation(
                         user_id=uid,
@@ -199,12 +233,32 @@ def bulk_update_participation(
                         reason=reason,
                     )
                     session.add(new_record)
+                    session.flush()  # To populate new_record.id
+                    
+                    audit_logs_to_create.append({
+                        "action": "create",
+                        "entity_id": new_record.id,
+                        "target_user_id": uid,
+                        "field_changed": meal_enum.value,
+                        "new_value": str(participating)
+                    })
                 
                 succeeded += 1
         
-        session.commit() # Commit all changes at once at the end
+        session.commit() # Commit all changes at once
+        
+    for log in audit_logs_to_create:
+        create_audit_entry(
+            actor_id=updated_by,
+            target_user_id=log["target_user_id"],
+            action=log["action"],
+            entity_type="meal_participation",
+            entity_id=log["entity_id"],
+            field_changed=log["field_changed"],
+            old_value=log.get("old_value"),
+            new_value=log.get("new_value")
+        )
 
-                
     return succeeded, failed
 
 def get_headcount_by_date(target_date: date) -> Dict[str, int]:
@@ -392,12 +446,25 @@ def set_work_location(
         record = session.exec(statement).first()
         
         if record:
-            record.location = location
-            record.updated_by = updated_by
-            record.updated_at = datetime.utcnow()
-            session.add(record)
-            session.commit()
-            session.refresh(record)
+            old_location = record.location
+            if old_location != location:
+                record.location = location
+                record.updated_by = updated_by
+                record.updated_at = datetime.utcnow()
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+                
+                create_audit_entry(
+                    actor_id=updated_by,
+                    target_user_id=user_id,
+                    action="update",
+                    entity_type="work_location",
+                    entity_id=record.id,
+                    field_changed="location",
+                    old_value=old_location.value if hasattr(old_location, "value") else str(old_location),
+                    new_value=location.value if hasattr(location, "value") else str(location)
+                )
             return record
         else:
             new_record = WorkLocation(
@@ -410,6 +477,16 @@ def set_work_location(
             session.add(new_record)
             session.commit()
             session.refresh(new_record)
+            
+            create_audit_entry(
+                actor_id=updated_by,
+                target_user_id=user_id,
+                action="create",
+                entity_type="work_location",
+                entity_id=new_record.id,
+                field_changed="location",
+                new_value=location.value if hasattr(location, "value") else str(location)
+            )
             return new_record
 
 

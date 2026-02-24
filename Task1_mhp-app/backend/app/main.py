@@ -4,7 +4,10 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 
-from app.routers import auth, users, meals, sse, teams, work_locations, special_days, headcount, accouncements, wfh_periods
+from app.routers import (
+    auth, users, meals, sse, teams, work_locations, special_days,
+    headcount, accouncements, wfh_periods, event_meals, audit_logs, policy
+)
 from app import storage
 from app.database import create_db_and_tables
 
@@ -56,6 +59,9 @@ app.include_router(special_days.router)
 app.include_router(headcount.router)
 app.include_router(accouncements.router)
 app.include_router(wfh_periods.router)
+app.include_router(event_meals.router, prefix="/api/event_meals", tags=["Event Meals"])
+app.include_router(audit_logs.router, prefix="/api/audit_logs", tags=["Audit Logs"])
+app.include_router(policy.router, prefix="/api/policy", tags=["Policy Config"])
 
 # ===========================
 # Health Check Endpoint
