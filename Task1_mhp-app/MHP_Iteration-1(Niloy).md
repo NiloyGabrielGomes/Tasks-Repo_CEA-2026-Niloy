@@ -124,6 +124,35 @@ The organization currently uses a manual Excel-based process to track daily meal
     - Create extensible data models
     - Implement authentication framework for future features
 
+13. **Future-Date Meal Planning** ← Iteration 3
+    - Employees can set meal participation for a future date within a limited forward window
+    - Admin/Logistics can view headcount forecasts for upcoming dates
+
+14. **Event Meals** ← Iteration 3
+    - Admin/Logistics can create "Event Meals" (e.g., Event Dinner) with date, meal type, and optional note
+    - Employees can opt in/out specifically for event meals if applicable
+
+15. **Auditability and Accountability** ← Iteration 3
+    - Admin/Logistics can see "who changed what and when" for participation entries
+    - Team Lead/Admin edits are identifiable so corrections are traceable
+
+16. **Operational Dashboards** ← Iteration 3
+    - Logistics/Admin dashboard includes daily headcount snapshot, upcoming forecast snapshot, and special day indicators
+
+17. **Policy Refinements** ← Iteration 3
+    - Cutoff rules, role permissions, and restrictions can be refined based on feedback from Iteration 1–2 usage
+
+18. **Monthly WFH Usage Summary (Soft Limit)** ← Iteration 3
+    - System shows WFH days used per employee for the current month
+    - Standard allowance is 5 WFH days per month; entries beyond the allowance are still accepted
+
+19. **Over-Limit Indicators in Reports** ← Iteration 3
+    - Team Lead and Admin/Logistics views clearly highlight employees who exceed the monthly WFH allowance
+    - Reports include rollups: number of employees over limit and total extra WFH days
+
+20. **Over-Limit Filters** ← Iteration 3
+    - Team Lead and Admin/Logistics views can filter to show only employees who are over the monthly WFH allowance
+
 ### Non-Goals
 
 **Features Deferred to Future Iterations:**
@@ -133,10 +162,10 @@ The organization currently uses a manual Excel-based process to track daily meal
    - Advance meal scheduling
    - Recurring participation patterns
 
-2. **Cutoff Time Enforcement**
-3. **Notifications and Reminders** (push/email[optional])
-4. **Analytics and Reporting** (historical logs, charts)
-5. **Advanced User Management** (self-service role changes)
+2. **Notifications and Reminders** (push/email[optional])
+3. **Advanced Analytics and Reporting** (historical trend charts, exportable reports)
+4. **Advanced User Management** (self-service role changes, SSO integration)
+5. **Database Migration** (move from JSON to relational database: SQLite)
 
 
 ---
@@ -215,6 +244,47 @@ The organization currently uses a manual Excel-based process to track daily meal
 - **FR-14.2:** During a declared WFH period, the system must treat all employees as WFH by default for reporting purposes
 - **FR-14.3:** Individual employees can still override their location if they come to the office during a WFH period
 
+#### FR-15: Future-Date Meal Planning ← Iteration 3
+- **FR-15.1:** Employees can set meal participation for a future date within a configurable forward window (e.g., up to 7 days ahead)
+- **FR-15.2:** Admin/Logistics can view headcount forecasts for any upcoming date within the forward window
+- **FR-15.3:** Future-date participation follows the same default opt-in rules as same-day participation
+
+#### FR-16: Event Meals ← Iteration 3
+- **FR-16.1:** Admin/Logistics can create an "Event Meal" entry with date, meal type, and optional note describing the event
+- **FR-16.2:** Event meals appear alongside regular meals on the relevant date for all employees
+- **FR-16.3:** Employees can opt in/out of event meals individually
+- **FR-16.4:** Event meals are clearly distinguished from regular daily meals in the UI
+
+#### FR-17: Auditability and Accountability ← Iteration 3
+- **FR-17.1:** System must record who changed what and when for every participation entry (create, update)
+- **FR-17.2:** Admin/Logistics can view a full audit log of participation changes, filterable by user, date, and action type
+- **FR-17.3:** Team Lead and Admin edits are identifiable in the audit trail so corrections are traceable
+- **FR-17.4:** Audit entries must include: actor, target user, field changed, old value, new value, and timestamp
+
+#### FR-18: Operational Dashboards ← Iteration 3
+- **FR-18.1:** Logistics/Admin dashboard must include a daily headcount snapshot section showing current-day totals
+- **FR-18.2:** Dashboard must include an upcoming forecast snapshot section showing headcount projections for the next N days (within forward window)
+- **FR-18.3:** Dashboard must display special day indicators (holiday/office closed/celebration) inline with forecast dates
+
+#### FR-19: Policy Refinements ← Iteration 3
+- **FR-19.1:** Admin can configure a participation cutoff time after which employees cannot modify their own participation for a given date
+- **FR-19.2:** Admin/Team Lead overrides remain permitted after the cutoff
+- **FR-19.3:** System must display the cutoff time to employees and indicate when modifications are locked
+
+#### FR-20: Monthly WFH Usage Summary ← Iteration 3
+- **FR-20.1:** System must track and display the number of WFH days used per employee for the current month
+- **FR-20.2:** The standard WFH allowance is 5 days per month (configurable by Admin)
+- **FR-20.3:** Entries beyond the monthly allowance are still accepted (soft limit, not enforced)
+- **FR-20.4:** Employees can view their own monthly WFH usage count on their dashboard
+
+#### FR-21: Over-Limit Indicators in Reports ← Iteration 3
+- **FR-21.1:** Team Lead and Admin/Logistics views must clearly highlight employees who exceed the monthly WFH allowance (e.g., visual badge or color indicator)
+- **FR-21.2:** Reports must include rollup totals: number of employees over the limit and total extra WFH days across the team/organization
+
+#### FR-22: Over-Limit Filters ← Iteration 3
+- **FR-22.1:** Team Lead view must support filtering to show only team members who are over the monthly WFH allowance
+- **FR-22.2:** Admin/Logistics view must support filtering to show only employees across all teams who are over the monthly WFH allowance
+
 ### Non-Functional Requirements
 
 #### NFR-1: Performance
@@ -238,6 +308,7 @@ The organization currently uses a manual Excel-based process to track daily meal
 #### Business Constraints
 - **BC-1:** Development timeline: Feb 10th, 2026 for Iteration 1
 - **BC-1.1:** Development timeline: Feb 23th, 2026 for Iteration 2 ← Iteration 2
+- **BC-1.2:** Development timeline: Feb 23th, 2026 for Iteration 3 ← Iteration 3
 - **BC-2:** Single developer resource
 
 #### User Constraints
@@ -300,7 +371,10 @@ The organization currently uses a manual Excel-based process to track daily meal
           │  │   ├─ special_days.py     │  │
           │  │   ├─ work_locations.py   │  │
           │  │   ├─ sse.py              │  │
-          │  │   └─ announcements.py    │  │  
+          │  │   ├─ announcements.py    │  │  
+          │  │   ├─ event_meals.py      │  │  ← Iteration 3
+          │  │   ├─ audit.py            │  │  ← Iteration 3
+          │  │   └─ policy.py           │  │  ← Iteration 3
           │  └──────────────────────────┘  │                 
           │  ┌──────────────────────────┐  │                 
           │  │   Business Logic:        │  │                 
@@ -325,7 +399,12 @@ The organization currently uses a manual Excel-based process to track daily meal
           │  ├─ bulk_update_participation()│
           │  ├─ get_special_day()          │
           │  ├─ get_work_location()        │
-          │  └─ get_wfh_periods()          │  
+          │  ├─ get_wfh_periods()          │  
+          │  ├─ get_audit_log()            │  ← Iteration 3
+          │  ├─ create_event_meal()        │  ← Iteration 3
+          │  ├─ get_headcount_forecast()   │  ← Iteration 3
+          │  ├─ get_wfh_monthly_usage()    │  ← Iteration 3
+          │  └─ get_policy_config()        │  ← Iteration 3
           └───────────────┬────────────────┘                 
                           │                                   
                     JSON File I/O                             
@@ -338,7 +417,10 @@ The organization currently uses a manual Excel-based process to track daily meal
           │  ├─ meal_participation.json    │                 
           │  ├─ special_days.json          │
           │  ├─ work_locations.json        │
-          │  └─ company_wfh_periods.json   │  
+          │  ├─ company_wfh_periods.json   │  
+          │  ├─ event_meals.json           │  ← Iteration 3
+          │  ├─ audit_log.json             │  ← Iteration 3
+          │  └─ policy_config.json         │  ← Iteration 3
           └────────────────────────────────┘                 
 ```
 
@@ -358,7 +440,10 @@ mhp-app/
 │ │ ├── meal_config.json
 │ │ ├── special_days.json
 │ │ ├── work_locations.json
-│ │ └── company_wfh_periods.json
+│ │ ├── company_wfh_periods.json
+│ │ ├── event_meals.json              ← Iteration 3
+│ │ ├── audit_log.json                ← Iteration 3
+│ │ └── policy_config.json            ← Iteration 3
 │ ├── requirements.txt
 │ └── .env
 ├── frontend/
@@ -393,6 +478,10 @@ Define the following models in models.py using the Pydantic validation library:
 ● WorkLocationType(enum) - Office, WFH
 ● CompanyWFHPeriod - id, start_date, end_date, declared_by, created_at
 
+● EventMeal - id, date, meal_type, note, created_by, created_at ← Iteration 3
+● AuditLogEntry - id, actor_id, target_user_id, action, entity_type, entity_id, field_changed, old_value, new_value, timestamp ← Iteration 3
+● PolicyConfig - id, cutoff_time, forward_planning_days, wfh_monthly_allowance, updated_by, updated_at ← Iteration 3
+
 Implement file-based JSON storage utilities in storage.py. Use {load_json(filename)} to
 read data, {save_json(filename, data)} to write data, and {get_by_id();
 create(); update(); delete()} as helpers. Create seed data for testing purposes.
@@ -404,6 +493,9 @@ Storage files:
 ● special_days.json - Stores special day entries (office closed, holidays, celebrations)
 ● work_locations.json - Stores per-user per-date work location selections
 ● company_wfh_periods.json - Stores admin-declared company-wide WFH date ranges
+● event_meals.json - Stores admin-created event meal entries ← Iteration 3
+● audit_log.json - Stores audit trail of all participation/location changes ← Iteration 3
+● policy_config.json - Stores configurable policy settings (cutoff time, forward window, WFH allowance) ← Iteration 3
 
 ### 3. User Flows
 
@@ -751,14 +843,14 @@ Scenario: Admin marks a date as a Government Holiday
            └─────────────────────────────────────────┘
            │
            ├─> Admin clicks "Save"
-           │
+           │ 
            ├─> [API Call: POST /api/special-days]
            │
            ├─> [System creates special day record]
            │   - Meal participation disabled for that date
            │   - All users see "Government Holiday" banner
            │
-           └─> Success: "February 21 marked as Government Holiday"
+           └─ > Success: "February 21 marked as Government Ho liday"
 
 Total time: ~30 seconds
 ```
@@ -924,6 +1016,183 @@ Scenario: Company declares WFH for a week due to office renovation
 Total time: ~30 seconds
 ```
 
+Flow 11: Employee Setting Future-Date Participation ← Iteration 3
+```
+┌─────────────────────────────────────────────────────────────┐
+│       Employee Setting Future-Date Meal Participation       │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Employee plans to WFH next Wednesday and wants to opt out of lunch
+
+1. Employee logs in
+   │
+   └─> EMPLOYEE DASHBOARD
+       │
+       ├─> Sees date selector (today + forward window):
+       │   ┌─────────────────────────────────────────┐
+       │   │ Select Date:                            │
+       │   │ [Today] [Feb 22] [Feb 23] ... [Feb 28]  │
+       │   └─────────────────────────────────────────┘
+       │
+       ├─> Selects "Feb 25, 2026" (Wednesday)
+       │
+       ├─> Sees meal participation for Feb 25:
+       │   ┌─────────────────────────────────┐
+       │   │ ✓ Lunch         [Opted In ]     │
+       │   │ ✓ Snacks        [Opted In ]     │
+       │   └─────────────────────────────────┘
+       │
+       ├─> Toggles Lunch to "Opted Out"
+       │
+       ├─> [API Call: PUT /api/meals/participation?date=2026-02-25]
+       │
+       └─> Success: "Lunch participation updated for Feb 25"
+
+Total time: ~20 seconds
+```
+
+Flow 12: Admin Creating an Event Meal ← Iteration 3
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Admin Creating an Event Meal                    │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Admin creates a special Event Dinner for a company anniversary
+
+1. Admin logs in
+   │
+   └─> ADMIN DASHBOARD
+       │
+       ├─> Navigates to "Event Meals"
+       │
+       └─> EVENT MEAL FORM
+           ┌─────────────────────────────────────────┐
+           │ Create Event Meal                       │
+           │                                         │
+           │ Date:      [March 5, 2026      ]        │
+           │ Meal Type: [Event Dinner       ▼]       │
+           │ Note:      [Company 10th Anniversary]   │
+           │                                         │
+           │ [Cancel]  [Create Event Meal]           │
+           └─────────────────────────────────────────┘
+           │
+           ├─> Admin clicks "Create Event Meal"
+           │
+           ├─> [API Call: POST /api/event-meals]
+           │
+           ├─> [System creates event meal record]
+           │   - Event Dinner appears on March 5 for all employees
+           │   - Employees can opt in/out individually
+           │
+           └─> Success: "Event Dinner created for March 5, 2026"
+
+Total time: ~30 seconds
+```
+
+Flow 13: Admin Viewing Audit Log ← Iteration 3
+```
+┌─────────────────────────────────────────────────────────────┐
+│               Admin Viewing Audit Log                       │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Admin investigates a disputed participation change
+
+1. Admin logs in
+   │
+   └─> ADMIN DASHBOARD
+       │
+       ├─> Navigates to "Audit Log"
+       │
+       ├─> Filters:
+       │   ┌─────────────────────────────────────────────────┐
+       │   │ User: [John Doe       ▼]                       │
+       │   │ Date: [Feb 21, 2026    ]                       │
+       │   │ Action: [All          ▼]                       │
+       │   │ [Apply Filters]                                │
+       │   └─────────────────────────────────────────────────┘
+       │
+       └─> AUDIT LOG TABLE:
+           ┌────────────────────────────────────────────────────────────────┐
+           │ Time       │ Actor       │ Target    │ Change              │
+           ├────────────┼─────────────┼───────────┼─────────────────────┤
+           │ 9:15 AM    │ john.doe    │ john.doe  │ Lunch: In → Out     │
+           │ 10:30 AM   │ teamlead    │ john.doe  │ Snacks: In → Out    │
+           │ 11:00 AM   │ john.doe    │ john.doe  │ Lunch: Out → In     │
+           └────────────┴─────────────┴───────────┴─────────────────────┘
+
+Total time: ~30 seconds
+```
+
+Flow 14: Admin Viewing Operational Dashboard with Forecast ← Iteration 3
+```
+┌─────────────────────────────────────────────────────────────┐
+│        Admin Operational Dashboard with Forecast            │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Logistics reviews upcoming headcount for the week
+
+1. Admin logs in
+   │
+   └─> ADMIN DASHBOARD → "Operational Overview"
+       │
+       ├─> TODAY'S SNAPSHOT:
+       │   ┌─────────────────────────────────────────────────┐
+       │   │ Feb 21, 2026 - 🎌 Government Holiday           │
+       │   │ Meals disabled for today                        │
+       │   └─────────────────────────────────────────────────┘
+       │
+       ├─> UPCOMING FORECAST (next 7 days):
+       │   ┌──────────────┬───────┬────────┬──────────────────┐
+       │   │ Date         │ Lunch │ Snacks │ Note             │
+       │   ├──────────────┼───────┼────────┼──────────────────┤
+       │   │ Feb 22 (Sun) │  --   │   --   │ Weekend          │
+       │   │ Feb 23 (Mon) │  85   │   90   │                  │
+       │   │ Feb 24 (Tue) │  88   │   91   │                  │
+       │   │ Feb 25 (Wed) │  82   │   89   │                  │
+       │   │ Feb 26 (Thu) │  86   │   90   │ 🎉 Celebration  │
+       │   │ Feb 27 (Fri) │  80   │   85   │                  │
+       │   │ Feb 28 (Sat) │  --   │   --   │ Weekend          │
+       │   └──────────────┴───────┴────────┴──────────────────┘
+       │
+       └─> Total time: ~15 seconds
+
+```
+
+Flow 15: Team Lead Viewing WFH Over-Limit Employees ← Iteration 3
+```
+┌─────────────────────────────────────────────────────────────┐
+│       Team Lead Viewing WFH Over-Limit Employees           │
+└─────────────────────────────────────────────────────────────┘
+
+Scenario: Team Lead checks which team members exceeded WFH allowance
+
+1. Team Lead logs in
+   │
+   └─> TEAM LEAD DASHBOARD
+       │
+       ├─> Sees "WFH Usage - February 2026" section:
+       │   ┌─────────────────────────────────────────────────────────┐
+       │   │ Monthly WFH Allowance: 5 days                          │
+       │   │                                                         │
+       │   │ ┌────────────────┬───────────┬──────────┬─────────┐     │
+       │   │ │ Employee       │ WFH Days  │ Allowed  │ Status  │     │
+       │   │ ├────────────────┼───────────┼──────────┼─────────┤     │
+       │   │ │ John Doe       │     3     │    5     │ ✓ OK    │     │
+       │   │ │ Jane Smith     │     7     │    5     │ ⚠ +2   │     │
+       │   │ │ Bob Wilson     │     5     │    5     │ ✓ OK    │     │
+       │   │ └────────────────┴───────────┴──────────┴─────────┘     │
+       │   │                                                         │
+       │   │ Summary: 1 employee over limit | 2 extra WFH days      │
+       │   │ [Filter: Over-Limit Only]                               │
+       │   └─────────────────────────────────────────────────────────┘
+       │
+       ├─> Clicks "Filter: Over-Limit Only"
+       │
+       └─> Filtered view shows only Jane Smith (7/5 days)
+
+Total time: ~15 seconds
+```
+
 ### 4. Authentication and Authorization
 
 ```
@@ -945,6 +1214,9 @@ Create routers in routers/ directory:
 ● special_days.py - Special day control endpoints
 ● work_locations.py - Work location endpoints
 ● announcements.py - Daily announcement draft endpoints
+● event_meals.py - Event meal management endpoints            ← Iteration 3
+● audit.py - Audit log viewing endpoints                      ← Iteration 3
+● policy.py - Policy configuration endpoints                  ← Iteration 3
 ```
 
 Core endpoints:
@@ -1015,6 +1287,41 @@ Daily Announcement:
 ```
 ● GET /api/announcements/draft?date={date} - Generate copy/paste-friendly announcement for a date
 ```
+
+Future-Date Planning: ← Iteration 3
+```
+● GET /api/meals/participation?date={date} - Get user's participation for a future date
+● PUT /api/meals/participation?date={date} - Employee sets participation for a future date (within forward window)
+● GET /api/meals/headcount/forecast?start={date}&end={date} - Admin views headcount forecast for upcoming dates
+```
+
+Event Meals: ← Iteration 3
+```
+● POST /api/event-meals - Admin creates an event meal (date, meal type, note)
+● GET /api/event-meals?date={date} - Get event meals for a date
+● GET /api/event-meals - List all event meals
+● DELETE /api/event-meals/{id} - Admin removes an event meal
+```
+
+Audit Log: ← Iteration 3
+```
+● GET /api/audit-log?user_id={id}&date={date}&action={type} - Admin views audit trail, filterable by user, date, action type
+```
+
+Policy Configuration: ← Iteration 3
+```
+● GET /api/policy - Get current policy config (cutoff time, forward window, WFH allowance)
+● PUT /api/policy - Admin updates policy config
+```
+
+Monthly WFH Usage: ← Iteration 3
+```
+● GET /api/wfh-usage/me?month={YYYY-MM} - Employee views own WFH usage for month
+● GET /api/wfh-usage/team?month={YYYY-MM} - Team Lead views team WFH usage with over-limit indicators
+● GET /api/wfh-usage/all?month={YYYY-MM} - Admin views all employees' WFH usage with over-limit indicators
+● GET /api/wfh-usage/team?month={YYYY-MM}&filter=over-limit - Filter to team members over monthly allowance
+● GET /api/wfh-usage/all?month={YYYY-MM}&filter=over-limit - Filter to all employees over monthly allowance
+```
 FastAPI features to be used:
 ```
 ● Automatic OpenAPI docs at /docs
@@ -1063,6 +1370,26 @@ FastAPI features to be used:
 25. GET /api/wfh-periods
 26. DELETE /api/wfh-periods/{id}
 
+### Phase 7 (Iteration 3 — Future Planning & Events)
+27. GET /api/meals/participation?date={date}
+28. PUT /api/meals/participation?date={date}
+29. GET /api/meals/headcount/forecast
+30. POST /api/event-meals
+31. GET /api/event-meals
+32. DELETE /api/event-meals/{id}
+
+### Phase 8 (Iteration 3 — Auditability & Policy)
+33. GET /api/audit-log
+34. GET /api/policy
+35. PUT /api/policy
+
+### Phase 9 (Iteration 3 — WFH Usage & Over-Limit)
+36. GET /api/wfh-usage/me
+37. GET /api/wfh-usage/team
+38. GET /api/wfh-usage/all
+39. GET /api/wfh-usage/team?filter=over-limit
+40. GET /api/wfh-usage/all?filter=over-limit
+
 ### 6. Frontend Development
 
 Initialize a React app with Vite and install dependencies using react-router-dom, axios. Create
@@ -1077,6 +1404,9 @@ Pages/Views:
 ○ Team name display
 ○ Work location selector for a date
 ○ Special day banner (holiday/office closed/celebration)
+○ Date selector for future-date planning (within forward window) ← Iteration 3
+○ Event meal cards with opt-in/out ← Iteration 3
+○ Monthly WFH usage counter ← Iteration 3
 ● AdminDashboard.jsx
 ○ Headcount summary view (totals per meal type, per team, Office/WFH split)
 ○ Option to update employee participation
@@ -1084,10 +1414,17 @@ Pages/Views:
 ○ Special day controls panel
 ○ Daily announcement generator
 ○ Company-wide WFH period management
+○ Operational overview with daily snapshot + forecast ← Iteration 3
+○ Event meal creation and management ← Iteration 3
+○ Audit log viewer with filters ← Iteration 3
+○ Policy configuration panel (cutoff time, forward window, WFH allowance) ← Iteration 3
+○ WFH over-limit report with filters ← Iteration 3
 ● TeamLeadDashboard.jsx
 ○ Team participation overview for the day
 ○ Bulk action controls (opt-out group of team members)
 ○ Correct missing work-location entries for team members
+○ Team WFH usage summary with over-limit highlighting ← Iteration 3
+○ Over-limit filter toggle ← Iteration 3
 ```
 Components:
 
@@ -1104,9 +1441,21 @@ Components:
 11. AnnouncementDraft.jsx - Generates and displays copy/paste-friendly announcement
 12. WFHPeriodManager.jsx - Admin form to declare/manage company-wide WFH periods
 13. LiveHeadcount.jsx - Real-time headcount display that updates without reload
+14. DateSelector.jsx - Forward-date picker for future planning (within configurable window) ← Iteration 3
+15. EventMealCard.jsx - Display and opt-in/out toggle for event meals ← Iteration 3
+16. EventMealForm.jsx - Admin form to create event meals ← Iteration 3
+17. AuditLogViewer.jsx - Filterable audit log table (by user, date, action) ← Iteration 3
+18. ForecastTable.jsx - Upcoming headcount forecast with special day indicators ← Iteration 3
+19. PolicyConfigForm.jsx - Admin form to configure cutoff time, forward window, WFH allowance ← Iteration 3
+20. WFHUsageSummary.jsx - Monthly WFH usage display per employee ← Iteration 3
+21. OverLimitBadge.jsx - Visual indicator for employees over WFH allowance ← Iteration 3
+22. OverLimitFilter.jsx - Toggle filter to show only over-limit employees ← Iteration 3
 Implement auth context for user session and token for state management. Local state for meal
 participation data and API calls wrapped in try-catch with loading states.
 Implement polling or WebSocket-based mechanism for live headcount updates (FR-11).
+
+Frontend must enforce the configurable forward planning window for future-date selection (FR-15). ← Iteration 3
+Frontend must display cutoff-locked state when past cutoff time (FR-19). ← Iteration 3
 
 
 ### 7. Other Logic Implementation
@@ -1293,6 +1642,30 @@ User should log in again
   - Allow Admin to delete/correct special day entries
 - **Contingency:** Admin can remove the incorrect entry immediately
 
+**Risk 10: Audit Log Growth** ← Iteration 3
+- **Likelihood:** High (every participation change logged)
+- **Impact:** Medium (JSON file size, read performance)
+- **Mitigation:**
+  - Paginate audit log API responses
+  - Consider periodic archival of old entries
+- **Contingency:** Accelerate database migration for structured query support
+
+**Risk 11: Policy Misconfiguration** ← Iteration 3
+- **Likelihood:** Low
+- **Impact:** Medium (cutoff too early locks out employees; forward window too short limits planning)
+- **Mitigation:**
+  - Provide sensible defaults (cutoff 9:00 PM, 7-day forward window, 5-day WFH allowance)
+  - Admin-only access to policy settings
+- **Contingency:** Admin can adjust policy at any time; changes take effect immediately
+
+**Risk 12: Forecast Accuracy** ← Iteration 3
+- **Likelihood:** Medium
+- **Impact:** Low (forecast is advisory, not authoritative)
+- **Mitigation:**
+  - Clearly label forecasts as projections, not final counts
+  - Use default opt-in assumption for unset future dates
+- **Contingency:** Logistics team uses snapshot at cutoff as the authoritative count
+
 ### Assumptions
 
 #### Technical Assumptions
@@ -1318,6 +1691,10 @@ User should log in again
 13. **Same-day updates sufficient** (no advance planning needed)
 14. **Logistics team uses the daily announcement draft** to communicate with kitchen staff
 15. **Special days (holidays/closures) are known in advance** and set by Admin before the date
+16. **7-day forward planning window is sufficient** for most employees' scheduling needs ← Iteration 3
+17. **WFH allowance of 5 days/month is the standard policy** across all teams ← Iteration 3
+18. **Over-limit WFH is informational only** — managers handle follow-up outside the system ← Iteration 3
+19. **Audit log volume is manageable** with JSON storage for the near term (100 users × ~5 changes/day) ← Iteration 3
 
 ---
 
@@ -1326,8 +1703,10 @@ User should log in again
 1. **Default opt-in approach** - All employees assumed participating unless they opt out
 2. **Same-day focus** - Only "today's" meals visible and editable (no historical/future view
     yet)
+    |-> **Forward planning window** - Employees can view and edit meals for today and future dates within a configurable window (default 7 days) ← Updated Iteration 3
 3. **Simple storage** - File-based JSON (easy to migrate to DB later)
 4. **Minimal validation** - Basic role checks; advanced cutoff logic deferred to later iterations
+    |-> **Configurable cutoff enforcement** - Admin-configurable cutoff time locks employee self-service; Admin/Team Lead overrides remain active ← Updated Iteration 3
 5. **Real-time counts** - Headcount calculated on-demand from participation records
 6. **Team-scoped access** - Team Leads see and manage only their own team's data; Admins see all
 7. **Special day overrides meals** - Office Closed and Government Holiday disable meal participation for the date
@@ -1335,3 +1714,10 @@ User should log in again
 9. **Polling for live updates** - Use short-interval polling (e.g., 15s) rather than WebSockets for simplicity
 10. **Announcement as text** - Daily announcement is plain text for copy/paste, not email integration
 11. **Date-based work location** - Work location is tracked per user per date, not as a permanent attribute
+12. **Configurable forward window** - Employees can plan meals up to N days ahead; Admin sets the window size ← Iteration 3
+13. **Cutoff as soft lock** - After cutoff, employees see a locked state but Admin/Team Lead can still override ← Iteration 3
+14. **Event meals as separate entities** - Event meals are distinct from regular daily meals and managed independently ← Iteration 3
+15. **Append-only audit log** - Audit entries are never modified or deleted; the log grows monotonically ← Iteration 3
+16. **Forecast uses default opt-in** - For future dates without explicit employee input, the system projects all active employees as opted-in ← Iteration 3
+17. **WFH soft limit** - The monthly allowance is advisory; the system highlights but does not block over-limit entries ← Iteration 3
+18. **Policy changes are immediate** - When Admin updates cutoff time or WFH allowance, the change applies immediately without requiring restart ← Iteration 3
