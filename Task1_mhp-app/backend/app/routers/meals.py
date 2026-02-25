@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Query, Depends
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from app.models import User, MealType, MealParticipation, UserRole, CUTOFF_HOUR, ADMIN_CONTROLLED_MEALS
 from app.auth import require_role
 from app.schemas import (
@@ -15,6 +15,8 @@ from app.schemas import (
     BulkParticipationRequest,
     BulkParticipationResponse,
     ExceptionParticipationRequest,
+    RangeParticipationRequest,
+    RangeParticipationResponse,
 )
 from app import auth as auth_service
 from app import storage
@@ -483,6 +485,103 @@ async def exception_override_participation(
         is_participating=updated.is_participating,
         updated_by=updated.updated_by,
         updated_at=updated.updated_at.isoformat(),
+    )
+
+# ===========================
+# Range Participation (set meals for a date range)
+# ===========================
+
+@router.post("/participation/range", response_model=RangeParticipationResponse)
+async def set_range_participation(
+    payload: RangeParticipationRequest,
+    current_user: User = Depends(auth_service.get_current_user),
+):
+
+    today = utils.get_today()
+
+    if payload.start_date > payload.end_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="start_date must be on or before end_date",
+        )
+
+    if payload.start_date < today:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot set meal preferences for past dates",
+        )
+
+    max_days = 30
+    delta = (payload.end_date - payload.start_date).days
+    if delta > max_days:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Date range cannot exceed {max_days} days",
+        )
+
+    # Validate meal keys up front
+    enabled_types = storage.get_enabled_meal_types()
+    for meal_key in payload.meals:
+        try:
+            meal_enum = MealType(meal_key)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid meal type: {meal_key}",
+            )
+        if meal_enum not in enabled_types:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Meal type '{meal_key}' is not currently enabled",
+            )
+
+    updated_dates = []
+    skipped_dates = []
+
+    current_date = payload.start_date
+    while current_date <= payload.end_date:
+        # Check if date is blocked (holiday / office closed / global WFH)
+        blocked, reason = storage.is_participation_blocked(current_date)
+        if blocked:
+            skipped_dates.append({"date": current_date.isoformat(), "reason": reason})
+            current_date += timedelta(days=1)
+            continue
+
+        # Enforce cutoff for employees on today
+        if (
+            current_user.role == UserRole.EMPLOYEE
+            and current_date == today
+            and _is_cutoff_passed()
+        ):
+            skipped_dates.append({
+                "date": current_date.isoformat(),
+                "reason": "Cutoff time (9 PM) has passed for today",
+            })
+            current_date += timedelta(days=1)
+            continue
+
+        storage.bulk_update_participation(
+            user_ids=[current_user.id],
+            target_date=current_date,
+            meals=payload.meals,
+            updated_by=current_user.id,
+            reason="Range preference",
+        )
+        # Persist range prefs so they survive Global WFH overrides
+        storage.save_scheduled_meal_preferences(
+            user_id=current_user.id,
+            target_date=current_date,
+            meals=payload.meals,
+        )
+        updated_dates.append(current_date.isoformat())
+        current_date += timedelta(days=1)
+
+    notify_headcount_change()
+
+    return RangeParticipationResponse(
+        updated_dates=updated_dates,
+        skipped_dates=skipped_dates,
+        meals=payload.meals,
     )
 
 # ===========================

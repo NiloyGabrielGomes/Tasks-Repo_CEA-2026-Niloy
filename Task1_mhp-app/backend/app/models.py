@@ -25,6 +25,7 @@ class DayType(str, Enum):
     OFFICE_CLOSED = "officeclosed"
     GOVERNMENT_HOLIDAY = "governmentholiday"
     SPECIAL_EVENT = "specialevent"
+    GLOBAL_WFH = "global_wfh"
 
 class WorkLocationType(str, Enum):
     OFFICE = "Office"
@@ -62,7 +63,7 @@ class WorkLocation(SQLModel, table=True):
 class SpecialDay(SQLModel, table=True):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
     date: dt_date = Field(index=True, unique=True)
-    day_type: DayType
+    day_type: str 
     note: Optional[str] = Field(default=None)
     created_by: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -103,6 +104,16 @@ class WFHPeriod(SQLModel, table=True):
     created_by: str = Field(foreign_key="user.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ScheduledMealPreference(SQLModel, table=True):
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    user_id: str = Field(foreign_key="user.id", index=True)
+    date: dt_date = Field(index=True)
+    meal_type: MealType
+    is_participating: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 DEFAULT_OPTED_IN_MEALS = {
     MealType.LUNCH,

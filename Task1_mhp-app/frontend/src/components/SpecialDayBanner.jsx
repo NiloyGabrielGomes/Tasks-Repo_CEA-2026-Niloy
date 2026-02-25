@@ -23,6 +23,14 @@ const TYPE_CONFIG = {
     text: 'text-blue-700 dark:text-blue-300',
     iconColor: 'text-blue-500',
   },
+  global_wfh: {
+    icon: 'home_work',
+    label: 'Global Work From Home',
+    bg: 'bg-indigo-50 dark:bg-indigo-900/20',
+    border: 'border-indigo-200 dark:border-indigo-800',
+    text: 'text-indigo-700 dark:text-indigo-300',
+    iconColor: 'text-indigo-500',
+  },
 };
 
 export default function SpecialDayBanner({ specialDay }) {

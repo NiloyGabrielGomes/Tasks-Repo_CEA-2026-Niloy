@@ -54,8 +54,13 @@ export default function BulkActionForm({ scope = 'all', team = null, onDone }) {
   const toggleMeal = (meal) => {
     setMeals((prev) => {
       const copy = { ...prev };
-      if (meal in copy) delete copy[meal];
-      else copy[meal] = false; // default: opt out
+      if (!(meal in copy)) {
+        copy[meal] = false; // default: opt out
+      } else if (copy[meal] === false) {
+        copy[meal] = true; // switch to opt in
+      } else {
+        delete copy[meal]; // remove selection
+      }
       return copy;
     });
   };
@@ -128,18 +133,29 @@ export default function BulkActionForm({ scope = 'all', team = null, onDone }) {
 
         {/* Meals */}
         <div>
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Meals to opt out</label>
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Select meals & action (Click to toggle: Opt-Out -&gt; Opt-In -&gt; None)</label>
           <div className="flex flex-wrap gap-2">
             {MEAL_OPTIONS.map((m) => {
-              const selected = m.value in meals;
+              const inState = m.value in meals;
+              const isOptIn = meals[m.value] === true;
+              
+              let styles = 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-primary/50';
+              let label = m.label;
+              
+              if (inState) {
+                if (isOptIn) {
+                   styles = 'bg-emerald-600 text-white border-emerald-600';
+                   label = `${m.label} (Opt-In)`;
+                } else {
+                   styles = 'bg-red-600 text-white border-red-600';
+                   label = `${m.label} (Opt-Out)`;
+                }
+              }
+
               return (
                 <button key={m.value} type="button" onClick={() => toggleMeal(m.value)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    selected
-                      ? 'bg-primary text-white border-primary'
-                      : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-primary/50'
-                  }`}>
-                  {m.label}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${styles}`}>
+                  {label}
                 </button>
               );
             })}

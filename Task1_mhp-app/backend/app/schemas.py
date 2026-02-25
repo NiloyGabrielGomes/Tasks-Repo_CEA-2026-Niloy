@@ -418,6 +418,42 @@ class ExceptionParticipationRequest(BaseModel):
             }
         }
 
+# ===========================
+# Range Participation Schema
+# ===========================
+
+class RangeParticipationRequest(BaseModel):
+    """Set meal participation for a range of dates at once."""
+    start_date: date
+    end_date: date
+    meals: Dict[str, bool]  # e.g. {"lunch": true, "snacks": false}
+
+    class Config:
+        from_attribute = True
+        json_schema_extra = {
+            "example": {
+                "start_date": "2026-02-20",
+                "end_date": "2026-02-26",
+                "meals": {"lunch": True, "snacks": True}
+            }
+        }
+
+class RangeParticipationResponse(BaseModel):
+    updated_dates: List[str]
+    skipped_dates: List[Dict[str, str]]  # [{date, reason}]
+    meals: Dict[str, bool]
+
+    class Config:
+        from_attribute = True
+        json_schema_extra = {
+            "example": {
+                "updated_dates": ["2026-02-20", "2026-02-21", "2026-02-22"],
+                "skipped_dates": [{"date": "2026-02-23", "reason": "Office Closed"}],
+                "meals": {"lunch": True, "snacks": True}
+            }
+        }
+
+
 class AdminParticipationUpdateResponse(BaseModel):
     message: str
     user_name: str
@@ -710,7 +746,7 @@ class TeamParticipationResponse(BaseModel):
 class SpecialDayCreate(BaseModel):
     #Request to create a special day.
     date: date
-    day_type: DayType
+    day_type: DayType | str
     note: Optional[str] = None
 
     class Config:
