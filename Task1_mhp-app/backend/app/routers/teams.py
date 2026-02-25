@@ -4,6 +4,7 @@ from app.models import User, UserRole
 from app.auth import require_role
 from app import auth as auth_service
 from app import storage
+from app import utils
 from app.schemas import TeamParticipationResponse, TeamMemberParticipation
 
 router = APIRouter(prefix="/api/teams", tags=["Teams"])
@@ -41,7 +42,7 @@ async def get_my_team_participation(
             detail="You are not assigned to any team",
         )
 
-    day = target_date or date.today()
+    day = target_date or utils.get_today()
     members_data = storage.get_team_participation(current_user.team, day)
 
     members = [TeamMemberParticipation(**m) for m in members_data]
@@ -67,7 +68,7 @@ async def get_all_teams_participation(
     Get participation grids for every team. Admin only.
     Returns a list of TeamParticipationResponse objects.
     """
-    day = target_date or date.today()
+    day = target_date or utils.get_today()
     teams = storage.get_all_teams()
 
     results = []
@@ -103,7 +104,7 @@ async def get_team_participation(
             detail="You can only view your own team's participation",
         )
 
-    day = target_date or date.today()
+    day = target_date or utils.get_today()
 
     all_teams = storage.get_all_teams()
     if team_name not in all_teams:

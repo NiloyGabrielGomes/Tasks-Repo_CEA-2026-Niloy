@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 from app.models import User, UserRole
 from app import storage
-from app.storage import _load_json, _save_json
+from app.storage import get_user_by_email
 
 load_dotenv()
 
@@ -20,7 +20,8 @@ if not SECRET_KEY:
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Using pbkdf2_sha256 due to bcrpypt compatibility issues.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 security = HTTPBearer()
 
