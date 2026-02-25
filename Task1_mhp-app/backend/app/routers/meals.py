@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from datetime import date, datetime, timedelta
-from app.models import User, MealType, MealParticipation, UserRole, CUTOFF_HOUR, ADMIN_CONTROLLED_MEALS
+from app.models import User, MealType, MealParticipation, UserRole, ADMIN_CONTROLLED_MEALS
 from app.auth import require_role
 from app.schemas import (
     MealParticipationResponse,
@@ -30,8 +30,33 @@ router = APIRouter()
 # ===========================
 
 def _is_cutoff_passed() -> bool:
-    """Check if the current time is past the cutoff hour (9 PM)."""
-    return utils.is_cutoff_passed(CUTOFF_HOUR)
+    """Check if the current time is past the cutoff hour from PolicyConfig."""
+    config = storage.get_policy_config()
+    cutoff_hour = int(config.cutoff_time.split(":")[0])
+    return utils.is_cutoff_passed(cutoff_hour)
+
+
+def _get_max_forward_date() -> date:
+    """Return the latest date a user is allowed to plan meals for."""
+    config = storage.get_policy_config()
+    return utils.get_today() + timedelta(days=config.forward_planning_days)
+
+
+def _validate_forward_window(target_date: date) -> None:
+    """Raise 400 if target_date is outside the allowed forward planning window."""
+    today = utils.get_today()
+    if target_date < today:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot set meal preferences for past dates",
+        )
+    max_date = _get_max_forward_date()
+    if target_date > max_date:
+        config = storage.get_policy_config()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Date is beyond the {config.forward_planning_days}-day forward planning window (max: {max_date.isoformat()})",
+        )
 
 # ===========================
 # Meal Configuration (Admin only)
@@ -175,13 +200,18 @@ async def update_meal_participation(
     """
     Update meal participation for a user
     User can update own meals, Team Leads/Admin can update for others
-    Employees are blocked after 9 PM cutoff; Admin/TL are exempt.
+    Employees are blocked after cutoff; Admin/TL are exempt.
+    Date must be within the forward planning window.
     """
     if current_user.id != user_id and current_user.role not in [UserRole.TEAM_LEAD, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to update this user's meals"
         )
+
+    # Enforce forward planning window for employees
+    if current_user.role == UserRole.EMPLOYEE:
+        _validate_forward_window(target_date)
     
     blocked, reason = storage.is_participation_blocked(target_date)
     if blocked:
@@ -191,9 +221,10 @@ async def update_meal_participation(
         )
 
     if current_user.role == UserRole.EMPLOYEE and target_date == utils.get_today() and _is_cutoff_passed():
+        config = storage.get_policy_config()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Meal participation changes are locked after 9:00 PM. You can update again tomorrow morning."
+            detail=f"Meal participation changes are locked after {config.cutoff_time}. You can update again tomorrow morning."
         )
     
     user = storage.get_user_by_id(user_id)
@@ -509,6 +540,15 @@ async def set_range_participation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot set meal preferences for past dates",
+        )
+
+    # Enforce forward planning window
+    max_forward = _get_max_forward_date()
+    if payload.end_date > max_forward:
+        config = storage.get_policy_config()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"End date is beyond the {config.forward_planning_days}-day forward planning window (max: {max_forward.isoformat()})",
         )
 
     max_days = 30
