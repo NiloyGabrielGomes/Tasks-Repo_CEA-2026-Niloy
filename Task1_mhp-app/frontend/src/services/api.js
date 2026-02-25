@@ -94,6 +94,12 @@ export const mealsAPI = {
 
   updateMealConfig: (mealType, enabled) =>
     api.put('/api/meals/config', { meal_type: mealType, enabled }),
+
+  bulkUpdate: (data) =>
+    api.post('/api/meals/participation/bulk', data),
+
+  setException: (data) =>
+    api.post('/api/meals/participation/exception', data),
 };
 
 // ===========================
@@ -155,6 +161,23 @@ export const workLocationsAPI = {
       date: targetDate,
       location,
     }),
+};
+
+// ===========================
+// Special Days API
+// ===========================
+
+export const specialDaysAPI = {
+  getByDate: (targetDate) =>
+    api.get('/api/special-days', { params: { date: targetDate } }),
+
+  getRange: (startDate, endDate) =>
+    api.get('/api/special-days/range', { params: { start: startDate, end: endDate } }),
+
+  create: (date, dayType, note = '') =>
+    api.post('/api/special-days', { date, day_type: dayType, note }),
+
+  delete: (id) => api.delete(`/api/special-days/${id}`),
 };
 
 // ===========================

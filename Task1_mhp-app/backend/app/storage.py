@@ -3,13 +3,14 @@ import os
 from datetime import date, datetime
 from typing import Optional, Dict, List
 from pathlib import Path
-from app.models import User, MealParticipation, MealType, WorkLocation, WorkLocationType, create_default_participation, ADMIN_CONTROLLED_MEALS
+from app.models import User, MealParticipation, MealType, WorkLocation, WorkLocationType, SpecialDay, DayType, create_default_participation, ADMIN_CONTROLLED_MEALS
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 USERS_FILE = DATA_DIR / "users.json"
 PARTICIPATION_FILE = DATA_DIR / "meal_participation.json"
 MEAL_CONFIG_FILE = DATA_DIR / "meal_config.json"
 WORK_LOCATIONS_FILE = DATA_DIR / "work_locations.json"
+SPECIAL_DAYS_FILE = DATA_DIR / "special_days.json"
 
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -93,10 +94,10 @@ def get_all_participation() -> List[MealParticipation]:
     participation_list = []
 
     for record in data.get("participation", []):
-        if isinstance(record.get("date"), str):
-            record["date"] = datetime.fromisoformat(record["date"]).date()
-        if isinstance(record.get("updated_at"), str):
-            record["updated_at"] = datetime.fromisoformat(record["updated_at"])
+        # if isinstance(record.get("date"), str):
+        #     record["date"] = datetime.fromisoformat(record["date"]).date()
+        # if isinstance(record.get("updated_at"), str):
+        #     record["updated_at"] = datetime.fromisoformat(record["updated_at"])
 
         participation_list.append(MealParticipation(**record))
 
@@ -136,7 +137,8 @@ def update_participation(
         target_date: date,
         meal_type: MealType,
         is_participating: bool,
-        updated_by: str
+        updated_by: str,
+        reason: str = None
 ) -> MealParticipation:
     data = _load_json(PARTICIPATION_FILE)
     records = data.get("participation", [])
@@ -153,6 +155,8 @@ def update_participation(
             record["is_participating"] = is_participating
             record["updated_by"] = updated_by
             record["updated_at"] = datetime.now().isoformat()
+            if reason is not None:
+                record["reason"] = reason
             found = True
             
             data["participation"] = records
@@ -169,10 +173,51 @@ def update_participation(
             date=target_date,
             is_participating=is_participating,
             updated_by=updated_by,
-            updated_at=datetime.now()
+            updated_at=datetime.now(),
+            reason=reason,
         )
         return create_participation(new_record)
-    
+
+
+def bulk_update_participation(
+    user_ids: list[str],
+    target_date: date,
+    meals: dict[str, bool],
+    updated_by: str,
+    reason: str = None,
+) -> tuple[int, list[dict]]:
+
+    succeeded = 0
+    failed = []
+
+    enabled = get_enabled_meal_types()
+
+    for uid in user_ids:
+        user = get_user_by_id(uid)
+        if not user:
+            failed.append({"user_id": uid, "error": "User not found"})
+            continue
+        for meal_key, participating in meals.items():
+            try:
+                meal_enum = MealType(meal_key)
+            except ValueError:
+                failed.append({"user_id": uid, "error": f"Invalid meal type: {meal_key}"})
+                continue
+            if meal_enum not in enabled:
+                failed.append({"user_id": uid, "error": f"{meal_key} is not enabled"})
+                continue
+            update_participation(
+                user_id=uid,
+                target_date=target_date,
+                meal_type=meal_enum,
+                is_participating=participating,
+                updated_by=updated_by,
+                reason=reason,
+            )
+            succeeded += 1
+
+    return succeeded, failed
+
 def get_headcount_by_date(target_date: date) -> Dict[str, int]:
     participation_records = get_participation_by_date(target_date)
     headcount = {meal_type.value: 0 for meal_type in MealType}
@@ -185,13 +230,11 @@ def get_headcount_by_date(target_date: date) -> Dict[str, int]:
 
 
 def get_users_by_team(team: str) -> List[User]:
-    """Get all users in a specific team"""
     all_users = get_all_users()
     return [u for u in all_users if u.team and u.team.lower() == team.lower()]
 
 
 def get_headcount_by_date_and_team(target_date: date, team: str) -> Dict[str, int]:
-    """Get headcount filtered by team for a specific date"""
     team_users = get_users_by_team(team)
     team_user_ids = {u.id for u in team_users}
     participation_records = get_participation_by_date(target_date)
@@ -244,7 +287,6 @@ def _save_work_locations(locations: List[dict]) -> None:
 
 
 def get_work_location(user_id: str, target_date: date) -> Optional[WorkLocation]:
-    """Get a user's work location for a specific date."""
     locations = _load_work_locations()
     for loc in locations:
         loc_date = loc.get("date")
@@ -369,20 +411,109 @@ def _save_meal_config(config: Dict[str, bool]) -> None:
     _save_json(MEAL_CONFIG_FILE, {"enabled_meals": config})
 
 def get_enabled_meals() -> Dict[str, bool]:
-    """Get which meal types are currently enabled."""
     return _load_meal_config()
 
 def set_meal_enabled(meal_type: str, enabled: bool) -> Dict[str, bool]:
-    """Enable or disable a meal type. Returns updated config."""
     config = _load_meal_config()
     config[meal_type] = enabled
     _save_meal_config(config)
     return config
 
 def get_enabled_meal_types() -> List[str]:
-    """Get list of meal type values that are currently enabled."""
     config = _load_meal_config()
     return [mt for mt, enabled in config.items() if enabled]
+
+
+# ===========================
+# Special Day Operations
+# ===========================
+
+def _load_special_days() -> List[dict]:
+    data = _load_json(SPECIAL_DAYS_FILE)
+    return data.get("special_days", [])
+
+
+def _save_special_days(days: List[dict]) -> None:
+    _save_json(SPECIAL_DAYS_FILE, {"special_days": days})
+
+
+def create_special_day(special_day: SpecialDay) -> SpecialDay:
+    days = _load_special_days()
+
+    # Check for duplicate date
+    for d in days:
+        d_date = d.get("date")
+        if isinstance(d_date, str):
+            d_date = datetime.fromisoformat(d_date).date() if "T" in d_date else date.fromisoformat(d_date)
+        sd_date = special_day.date
+        if isinstance(sd_date, str):
+            sd_date = date.fromisoformat(sd_date)
+        if d_date == sd_date:
+            raise ValueError(f"A special day already exists for {special_day.date}")
+
+    days.append(special_day.model_dump(mode="json"))
+    _save_special_days(days)
+    return special_day
+
+
+def get_special_day_by_date(target_date: date) -> Optional[SpecialDay]:
+    days = _load_special_days()
+    for d in days:
+        d_date = d.get("date")
+        if isinstance(d_date, str):
+            d_date = datetime.fromisoformat(d_date).date() if "T" in d_date else date.fromisoformat(d_date)
+        if d_date == target_date:
+            d["date"] = d_date
+            if isinstance(d.get("created_at"), str):
+                d["created_at"] = datetime.fromisoformat(d["created_at"])
+            return SpecialDay(**d)
+    return None
+
+
+def get_special_days_range(start_date: date, end_date: date) -> List[SpecialDay]:
+    days = _load_special_days()
+    results = []
+    for d in days:
+        d_date = d.get("date")
+        if isinstance(d_date, str):
+            d_date = datetime.fromisoformat(d_date).date() if "T" in d_date else date.fromisoformat(d_date)
+        if start_date <= d_date <= end_date:
+            d["date"] = d_date
+            if isinstance(d.get("created_at"), str):
+                d["created_at"] = datetime.fromisoformat(d["created_at"])
+            results.append(SpecialDay(**d))
+    return results
+
+
+def delete_special_day(special_day_id: str) -> bool:
+    days = _load_special_days()
+    original_len = len(days)
+    days = [d for d in days if d.get("id") != special_day_id]
+    if len(days) == original_len:
+        return False
+    _save_special_days(days)
+    return True
+
+
+def is_participation_blocked(target_date: date) -> tuple[bool, str | None]:
+    sd = get_special_day_by_date(target_date)
+    if sd is None:
+        return False, None
+
+    day_type = sd.day_type
+    if isinstance(day_type, str):
+        day_type_val = day_type
+    else:
+        day_type_val = day_type.value if hasattr(day_type, "value") else str(day_type)
+
+    if day_type_val in (DayType.OFFICE_CLOSED.value, DayType.GOVERNMENT_HOLIDAY.value):
+        label = "Office Closed" if day_type_val == DayType.OFFICE_CLOSED.value else "Government Holiday"
+        reason = f"Meal participation is not available: {label}"
+        if sd.note:
+            reason += f" — {sd.note}"
+        return True, reason
+
+    return False, None
 
 # ===========================
 # Initialization and Seeding
@@ -430,9 +561,12 @@ def seed_initial_data() -> None:
     initialize_daily_participation(today)
     print(f"Initialized participation for {today}")
     
+    if not SPECIAL_DAYS_FILE.exists():
+        _save_json(SPECIAL_DAYS_FILE, {"special_days": []})
+        print("Initialized special_days.json")
+
     print("Seed data created successfully!")
 
 
 if __name__ == "__main__":
-    # Run seed data when this module is executed directly
     seed_initial_data()

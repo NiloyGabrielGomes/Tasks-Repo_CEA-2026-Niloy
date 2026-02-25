@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
-from app.models import UserRole, MealType, WorkLocationType
+from app.models import UserRole, MealType, WorkLocationType, DayType
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -172,12 +172,13 @@ class MealParticipationResponse(BaseModel):
     id: str
     user_id: str
     meal_type: str
-    date: str
+    date: date
     is_participating: bool
     updated_by: str | None = None
-    updated_at: str
+    updated_at: datetime
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "id": "part-001",
@@ -191,11 +192,12 @@ class MealParticipationResponse(BaseModel):
         }
 
 class UserMealsResponse(BaseModel):
-    date: str
+    date: date
     meals: List[MealParticipationResponse]
     cutoff_passed: bool = False
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2026-02-17",
@@ -220,6 +222,7 @@ class TodayMealsResponse(BaseModel):
     meals: list[MealInfo]
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2023-01-15",
@@ -367,6 +370,69 @@ class BatchParticipationResponse(BaseModel):
             }
         }
 
+
+# ===========================
+# Bulk Participation Schemas (FR-8)
+# ===========================
+
+class BulkParticipationRequest(BaseModel):
+    user_ids: List[str]
+    date: date
+    meals: Dict[str, bool]  
+    reason: Optional[str] = None
+
+    class Config:
+        from_attribute = True
+        json_schema_extra = {
+            "example": {
+                "user_ids": ["user-1", "user-2"],
+                "date": "2026-02-20",
+                "meals": {"lunch": True, "snacks": False},
+                "reason": "Team outing"
+            }
+        }
+
+
+class BulkParticipationResponse(BaseModel):
+    updated_count: int
+    failed: List[Dict[str, str]]
+    date: date
+
+    class Config:
+        from_attribute = True
+        json_schema_extra = {
+            "example": {
+                "updated_count": 4,
+                "failed": [{"user_id": "user-3", "error": "User not found"}],
+                "date": "2026-02-20"
+            }
+        }
+
+
+# ===========================
+# Exception Participation Schema (FR-8)
+# ===========================
+
+class ExceptionParticipationRequest(BaseModel):
+    """Team Lead overrides a single user's meal participation with a reason."""
+    user_id: str
+    date: date
+    meal_type: str
+    is_participating: bool
+    reason: str
+
+    class Config:
+        from_attribute = True
+        json_schema_extra = {
+            "example": {
+                "user_id": "user-1",
+                "date": "2026-02-20",
+                "meal_type": "lunch",
+                "is_participating": False,
+                "reason": "Working from home"
+            }
+        }
+
 class AdminParticipationUpdateResponse(BaseModel):
     message: str
     user_name: str
@@ -422,11 +488,12 @@ class MealConfigUpdateRequest(BaseModel):
 # ===========================
 
 class HeadcountResponse(BaseModel):
-    date: str
+    date: date
     headcount: Dict[str, int]
     total_employees: int = 0
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2026-02-06",
@@ -473,11 +540,11 @@ class ErrorResponse(BaseModel):
 # ===========================
 
 class WorkLocationUpdate(BaseModel):
-    """Request to set a user's work location for a date."""
     date: date
     location: WorkLocationType
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "date": "2026-02-19",
@@ -493,6 +560,7 @@ class AdminWorkLocationUpdate(BaseModel):
     location: WorkLocationType
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "user_id": "user-1",
@@ -505,12 +573,13 @@ class AdminWorkLocationUpdate(BaseModel):
 class WorkLocationResponse(BaseModel):
     id: str
     user_id: str
-    date: str
+    date: date
     location: str
     updated_by: Optional[str] = None
-    updated_at: str
+    updated_at: datetime
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "id": "wl-001",
@@ -524,7 +593,7 @@ class WorkLocationResponse(BaseModel):
 
 
 class WorkLocationListResponse(BaseModel):
-    date: str
+    date: date
     locations: List[WorkLocationResponse]
     total: int
 
@@ -543,11 +612,12 @@ class TeamMemberParticipation(BaseModel):
 
 class TeamParticipationResponse(BaseModel):
     team: str
-    date: str
+    date: date
     members: List[TeamMemberParticipation]
     total_members: int
 
     class Config:
+        from_attribute = True
         json_schema_extra = {
             "example": {
                 "team": "Engineering",
@@ -562,5 +632,69 @@ class TeamParticipationResponse(BaseModel):
                     }
                 ],
                 "total_members": 1
+            }
+        }
+
+# ===========================
+# Special Day Schemas
+# ===========================
+
+class SpecialDayCreate(BaseModel):
+    #Request to create a special day.
+    date: date
+    day_type: DayType
+    note: Optional[str] = None
+
+    class Config:
+        from_attribute = True
+        json_schema_extra = {
+            "example": {
+                "date": "2026-03-26",
+                "day_type": "governmentholiday",
+                "note": "Independence Day"
+            }
+        }
+
+
+class SpecialDayResponse(BaseModel):
+    id: str
+    date: date
+    day_type: str
+    note: Optional[str] = None
+    created_by: str
+    created_at: datetime
+
+    class Config:
+        from_attribute = True
+        json_schema_extra = {
+            "example": {
+                "id": "sd-001",
+                "date": "2026-03-26",
+                "day_type": "governmentholiday",
+                "note": "Independence Day",
+                "created_by": "admin-user-id",
+                "created_at": "2026-02-19T10:30:00"
+            }
+        }
+
+
+class SpecialDayListResponse(BaseModel):
+    special_days: List[SpecialDayResponse]
+    total: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "special_days": [
+                    {
+                        "id": "sd-001",
+                        "date": "2026-03-26",
+                        "day_type": "governmentholiday",
+                        "note": "Independence Day",
+                        "created_by": "admin-user-id",
+                        "created_at": "2026-02-19T10:30:00"
+                    }
+                ],
+                "total": 1
             }
         }

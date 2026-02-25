@@ -21,6 +21,11 @@ class MealType(str, Enum):
     EVENT_DINNER = "event_dinner"
     OPTIONAL_DINNER = "optional_dinner"
 
+class DayType(str, Enum):
+    OFFICE_CLOSED = "officeclosed"
+    GOVERNMENT_HOLIDAY = "governmentholiday"
+    SPECIAL_EVENT = "specialevent"
+
 
 class WorkLocationType(str, Enum):
     OFFICE = "Office"
@@ -59,6 +64,7 @@ class MealParticipation(BaseModel):
     is_participating: bool = True
     updated_by: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.now)
+    reason: Optional[str] = None
 
     class Config:
         json_schema_extra = {
@@ -73,8 +79,6 @@ class MealParticipation(BaseModel):
             }
         }
 
-# Meals that employees are opted-in for by default.
-# Iftar and Event Dinner are NOT default meals — they require admin configuration to enable.
 DEFAULT_OPTED_IN_MEALS = {
     MealType.LUNCH,
     MealType.SNACKS,
@@ -124,3 +128,23 @@ def create_default_participation(user_id: str, target_date: date) -> list[MealPa
         )
         for meal_type in MealType
     ]
+
+class SpecialDay(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    date: date
+    day_type: DayType
+    note: str | None = None
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "sd-001",
+                "date": "2026-03-26",
+                "day_type": "governmentholiday",
+                "note": "Independence Day",
+                "created_by": "admin-user-id",
+                "created_at": "2026-02-19T10:30:00"
+            }
+        }

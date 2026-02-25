@@ -3,19 +3,8 @@ from datetime import datetime, timezone
 
 # ── Internal State ──────────────────────────────────────────────
 
-_headcount_event: asyncio.Event | None = None
+_headcount_event: asyncio.Event = asyncio.Event()
 _last_change_timestamp: str | None = None
-
-
-def _get_event() -> asyncio.Event:
-    """
-    Lazily initialise the asyncio.Event.
-    Must be called inside a running event loop (i.e., during a request).
-    """
-    global _headcount_event
-    if _headcount_event is None:
-        _headcount_event = asyncio.Event()
-    return _headcount_event
 
 
 # ── Public API ──────────────────────────────────────────────────
@@ -35,12 +24,12 @@ def notify_headcount_change() -> None:
     """
     global _last_change_timestamp
     _last_change_timestamp = datetime.now(timezone.utc).isoformat()
-    _get_event().set()
+    _headcount_event.set()
 
 
 async def wait_for_change(timeout: float = 30.0) -> bool:
 
-    event = _get_event()
+    event = _headcount_event
     try:
         await asyncio.wait_for(event.wait(), timeout=timeout)
 

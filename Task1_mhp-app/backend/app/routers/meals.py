@@ -12,6 +12,9 @@ from app.schemas import (
     MealConfigUpdateRequest,
     BatchParticipationRequest,
     BatchParticipationResponse,
+    BulkParticipationRequest,
+    BulkParticipationResponse,
+    ExceptionParticipationRequest,
 )
 from app import auth as auth_service
 from app import storage
@@ -117,14 +120,12 @@ async def get_user_meals(
     Get user's meal participation for a specific date
     User can view own meals, Team Leads/Admin can view any user
     """
-    # Check permissions
     if current_user.id != user_id and current_user.role not in [UserRole.TEAM_LEAD, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view this user's meals"
         )
     
-    # Verify user exists
     user = storage.get_user_by_id(user_id)
     if not user:
         raise HTTPException(
@@ -134,7 +135,6 @@ async def get_user_meals(
     
     participation = storage.get_user_participation(user_id, target_date)
     
-    # Filter to only enabled meals
     enabled_types = storage.get_enabled_meal_types()
     
     meals = [
@@ -174,21 +174,25 @@ async def update_meal_participation(
     User can update own meals, Team Leads/Admin can update for others
     Employees are blocked after 9 PM cutoff; Admin/TL are exempt.
     """
-    # Check permissions
     if current_user.id != user_id and current_user.role not in [UserRole.TEAM_LEAD, UserRole.ADMIN]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to update this user's meals"
         )
     
-    # Enforce cutoff for regular employees (not admin/TL)
+    blocked, reason = storage.is_participation_blocked(target_date)
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=reason,
+        )
+
     if current_user.role == UserRole.EMPLOYEE and target_date == date.today() and _is_cutoff_passed():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Meal participation changes are locked after 9:00 PM. You can update again tomorrow morning."
         )
     
-    # Verify user exists
     user = storage.get_user_by_id(user_id)
     if not user:
         raise HTTPException(
@@ -196,7 +200,6 @@ async def update_meal_participation(
             detail="User not found"
         )
     
-    # Validate meal type
     try:
         meal_enum = MealType(meal_type)
     except ValueError:
@@ -206,7 +209,6 @@ async def update_meal_participation(
             detail=f"Invalid meal type. Valid options: {valid_meals}"
         )
     
-    # Verify the meal type is currently enabled
     enabled_types = storage.get_enabled_meal_types()
     if meal_enum not in enabled_types:
         raise HTTPException(
@@ -214,7 +216,6 @@ async def update_meal_participation(
             detail=f"The meal type '{meal_type}' is not currently enabled"
         )
     
-    # Update participation
     updated = storage.update_participation(
         user_id=user_id,
         target_date=target_date,
@@ -223,7 +224,6 @@ async def update_meal_participation(
         updated_by=current_user.id
     )
 
-    # Notify SSE clients of headcount change
     notify_headcount_change()
     
     return MealParticipationResponse(
@@ -250,7 +250,6 @@ async def admin_update_participation(
     Team Leads can only update users in their team.
     Records who made the update for audit trail.
     """
-    # Get target user
     target_user = storage.get_user_by_id(request.user_id)
     if not target_user:
         raise HTTPException(
@@ -258,14 +257,19 @@ async def admin_update_participation(
             detail="User not found"
         )
     
-    # Team leads can only update their own team
     if current_user.role == UserRole.TEAM_LEAD and current_user.team != target_user.team:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Can only update users in your team"
         )
+
+    blocked, reason = storage.is_participation_blocked(date.today())
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=reason,
+        )
     
-    # Validate meal type
     try:
         meal_enum = MealType(request.meal_type)
     except ValueError:
@@ -275,7 +279,6 @@ async def admin_update_participation(
             detail=f"Invalid meal type. Valid options: {valid_meals}"
         )
     
-    # Verify the meal type is currently enabled
     enabled_types = storage.get_enabled_meal_types()
     if meal_enum not in enabled_types:
         raise HTTPException(
@@ -285,7 +288,6 @@ async def admin_update_participation(
     
     today = date.today()
     
-    # Update participation with audit trail (updated_by = admin/TL id)
     updated = storage.update_participation(
         user_id=request.user_id,
         target_date=today,
@@ -294,7 +296,6 @@ async def admin_update_participation(
         updated_by=current_user.id
     )
 
-    # Notify SSE clients of headcount change
     notify_headcount_change()
     
     return MealParticipationResponse(
@@ -325,6 +326,14 @@ async def batch_admin_update_participation(
     succeeded = 0
     failed = 0
     today = date.today()
+
+    blocked, reason = storage.is_participation_blocked(today)
+    if blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=reason,
+        )
+
     enabled_types = storage.get_enabled_meal_types()
 
     for item in payload.updates:
@@ -379,6 +388,100 @@ async def batch_admin_update_participation(
         succeeded=succeeded,
         failed=failed,
         results=results,
+    )
+
+# ===========================
+# Bulk Participation Update (FR-8)
+# ===========================
+
+@router.post("/participation/bulk", response_model=BulkParticipationResponse)
+async def bulk_update_participation(
+    payload: BulkParticipationRequest,
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN])),
+):
+    blocked, reason = storage.is_participation_blocked(payload.date)
+    if blocked:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
+
+    user_ids = payload.user_ids
+    if current_user.role == UserRole.TEAM_LEAD:
+        team_users = storage.get_users_by_team(current_user.team)
+        team_ids = {u.id for u in team_users}
+        not_in_team = [uid for uid in user_ids if uid not in team_ids]
+        if not_in_team:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Cannot update users outside your team: {not_in_team}",
+            )
+
+    updated_count, failed = storage.bulk_update_participation(
+        user_ids=user_ids,
+        target_date=payload.date,
+        meals=payload.meals,
+        updated_by=current_user.id,
+        reason=payload.reason,
+    )
+
+    if updated_count > 0:
+        notify_headcount_change()
+
+    return BulkParticipationResponse(
+        updated_count=updated_count,
+        failed=failed,
+        date=payload.date.isoformat(),
+    )
+
+# ===========================
+# Exception Override (FR-8)
+# ===========================
+
+@router.post("/participation/exception", response_model=MealParticipationResponse)
+async def exception_override_participation(
+    payload: ExceptionParticipationRequest,
+    current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN])),
+):
+    target_user = storage.get_user_by_id(payload.user_id)
+    if not target_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if current_user.role == UserRole.TEAM_LEAD and current_user.team != target_user.team:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Can only update users in your team")
+
+    # Validate meal type
+    try:
+        meal_enum = MealType(payload.meal_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid meal type: {payload.meal_type}",
+        )
+
+    enabled_types = storage.get_enabled_meal_types()
+    if meal_enum not in enabled_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Meal type '{payload.meal_type}' is not enabled",
+        )
+
+    updated = storage.update_participation(
+        user_id=payload.user_id,
+        target_date=payload.date,
+        meal_type=meal_enum,
+        is_participating=payload.is_participating,
+        updated_by=current_user.id,
+        reason=payload.reason,
+    )
+
+    notify_headcount_change()
+
+    return MealParticipationResponse(
+        id=updated.id,
+        user_id=updated.user_id,
+        meal_type=updated.meal_type.value,
+        date=updated.date.isoformat(),
+        is_participating=updated.is_participating,
+        updated_by=updated.updated_by,
+        updated_at=updated.updated_at.isoformat(),
     )
 
 # ===========================

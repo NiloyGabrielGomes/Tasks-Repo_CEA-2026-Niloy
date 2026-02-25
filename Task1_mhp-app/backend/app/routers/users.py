@@ -13,23 +13,10 @@ router = APIRouter()
 
 @router.get("", response_model=UserListResponse)
 async def get_all_users(current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))):
-    """
-    Get list of all users - Team Lead and Admin
-    """
-    all_users = storage.get_all_users()
-    user_responses = [
-        UserResponse(
-            id=user.id,
-            name=user.name,
-            email=user.email,
-            role=user.role,
-            team=user.team,
-            is_active=user.is_active
-        )
-        for user in all_users
-    ]
     
-    return UserListResponse(users=user_responses, total=len(user_responses))
+    all_users = storage.get_all_users()
+    
+    return UserListResponse(users=all_users, total=len(all_users))
 
 # ===========================
 # Get Current User Profile
@@ -37,9 +24,7 @@ async def get_all_users(current_user: User = Depends(require_role([UserRole.TEAM
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(auth_service.get_current_user)):
-    """
-    Get current authenticated user's profile
-    """
+
     return UserResponse(
         id=current_user.id,
         name=current_user.name,
@@ -58,9 +43,7 @@ async def admin_create_user(
     user_data: UserCreate,
     current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
-    """
-    Create a new user with any role - Admin only
-    """
+
     existing = storage.get_user_by_email(user_data.email)
     if existing:
         raise HTTPException(
@@ -102,9 +85,7 @@ async def admin_create_user(
 
 @router.get("/team", response_model=UserListResponse)
 async def get_team_users(current_user: User = Depends(require_role([UserRole.TEAM_LEAD, UserRole.ADMIN]))):
-    """
-    Get list of users in the current user's team - Team Lead and Admin
-    """
+
     team_users = storage.get_users_by_team(current_user.team)
     user_responses = [
         UserResponse(
@@ -126,9 +107,7 @@ async def get_team_users(current_user: User = Depends(require_role([UserRole.TEA
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: str, current_user: User = Depends(auth_service.get_current_user)):
-    """
-    Get user by ID - User can view own profile, Team Lead and Admin can view any
-    """
+
     # Check permissions
     if current_user.id != user_id and current_user.role not in [UserRole.TEAM_LEAD, UserRole.ADMIN]:
         raise HTTPException(
@@ -162,9 +141,7 @@ async def update_user(
     update_data: UserUpdate,
     current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
-    """
-    Update user information - Admin only
-    """
+ 
     user = storage.get_user_by_id(user_id)
     if not user:
         raise HTTPException(
@@ -203,9 +180,7 @@ async def deactivate_user(
     user_id: str,
     current_user: User = Depends(require_role([UserRole.ADMIN]))
 ):
-    """
-    Soft delete - deactivate a user. Admin only.
-    """
+
     user = storage.get_user_by_id(user_id)
     if not user:
         raise HTTPException(

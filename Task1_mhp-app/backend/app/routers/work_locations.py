@@ -37,7 +37,6 @@ async def set_my_work_location(
     request: WorkLocationUpdate,
     current_user: User = Depends(auth_service.get_current_user),
 ):
-    """Set the current user's work location for a given date."""
     wl = storage.set_work_location(
         user_id=current_user.id,
         target_date=request.date,
@@ -45,7 +44,7 @@ async def set_my_work_location(
         updated_by=current_user.id,
     )
     notify_headcount_change()
-    return _to_response(wl)
+    return wl
 
 
 # ===========================
