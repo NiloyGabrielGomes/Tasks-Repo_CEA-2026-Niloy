@@ -21,6 +21,11 @@ class MealType(str, Enum):
     EVENT_DINNER = "event_dinner"
     OPTIONAL_DINNER = "optional_dinner"
 
+
+class WorkLocationType(str, Enum):
+    OFFICE = "Office"
+    WFH = "WFH"
+
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str = Field(..., min_length=1, max_length=255)
@@ -81,6 +86,28 @@ ADMIN_CONTROLLED_MEALS = {
     MealType.IFTAR,
     MealType.EVENT_DINNER,
 }
+
+
+class WorkLocation(BaseModel):
+    """Tracks where a user is working on a specific date."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    date: date
+    location: WorkLocationType = WorkLocationType.OFFICE
+    updated_by: Optional[str] = None
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": "wl-001",
+                "user_id": "user-1",
+                "date": "2026-02-19",
+                "location": "Office",
+                "updated_by": "user-1",
+                "updated_at": "2026-02-19T08:00:00"
+            }
+        }
 
 # Cutoff hour (24h format). Employees cannot change participation after this hour.
 CUTOFF_HOUR = 21  # 9:00 PM
