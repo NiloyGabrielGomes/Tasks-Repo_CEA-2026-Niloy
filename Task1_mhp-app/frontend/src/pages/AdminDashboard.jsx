@@ -8,6 +8,9 @@ import SpecialDayForm from '../components/SpecialDayForm';
 import BulkActionForm from '../components/BulkActionForm';
 import AnnouncementDraft from '../components/AnnouncementDraft';
 import WFHPeriodManager from '../components/WFHPeriodManager';
+import EventMealForm from '../components/EventMealForm';
+import AuditLogViewer from '../components/AuditLogViewer';
+import PolicySettingsForm from '../components/PolicySettingsForm';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -44,7 +47,7 @@ export default function AdminDashboard() {
   const [success, setSuccess] = useState('');
 
   const [specialDay, setSpecialDay] = useState(null);
-  
+
   // Global WFH State
   const [globalWFHLoading, setGlobalWFHLoading] = useState(false);
   const isGlobalWFH = specialDay?.day_type === 'global_wfh';
@@ -105,6 +108,9 @@ export default function AdminDashboard() {
 
   // Search/filter
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Active Admin Tab
+  const [activeTab, setActiveTab] = useState('overview');
 
   // ── SSE live headcount ───────────────────────────────────────
   const { headcount: liveData } = useHeadcountStream(selectedDate);
@@ -340,13 +346,13 @@ export default function AdminDashboard() {
                 title={specialDay && !isGlobalWFH ? "Cannot enable WFH on an existing Special Day/Holiday" : "Toggle Global WFH for everyone"}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                   isGlobalWFH ? 'bg-blue-600' : 'bg-slate-200 dark:bg-slate-700'
-                } ${globalWFHLoading || (specialDay && !isGlobalWFH) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${globalWFHLoading || (specialDay && !isGlobalWFH) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <span
                   aria-hidden="true"
                   className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
                     isGlobalWFH ? 'translate-x-5' : 'translate-x-0'
-                  }`}
+                    }`}
                 />
               </button>
             </div>
@@ -366,6 +372,84 @@ export default function AdminDashboard() {
 
         <SpecialDayBanner specialDay={specialDay} />
 
+        {/* Tab Navigation */}
+        <div className="mb-8 border-b border-slate-200 dark:border-slate-800">
+          <nav className="flex space-x-6 overflow-x-auto pb-1 hide-scrollbar">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'overview'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-[18px]">dashboard</span>
+                Dashboard Overview
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('announcements')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'announcements'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-[18px]">campaign</span>
+                Announcements
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('event_meals')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'event_meals'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-[18px]">celebration</span>
+                Event Meals
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'users'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-[18px]">group</span>
+                User Management
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'settings'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-[18px]">settings</span>
+                System Settings
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('audit')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'audit'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'
+                }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-icons-outlined text-[18px]">history</span>
+                Audit Logs
+              </div>
+            </button>
+          </nav>
+        </div>
+
         {success && (
           <div className="mb-6 flex items-center p-3.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400 text-sm">
             <span className="material-icons-outlined mr-2 text-lg">check_circle</span>
@@ -376,236 +460,266 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <span className="material-icons-outlined text-primary">group</span>
-              </div>
-            </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Headcount</h3>
-            <p className="text-3xl font-bold mt-1">{totalHeadcount}</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <span className="material-icons-outlined text-primary">restaurant_menu</span>
-              </div>
-            </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">Meal Types Available</h3>
-            <p className="text-3xl font-bold mt-1">{headcount ? Object.keys(headcount).length : 0}</p>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <span className="material-icons-outlined text-primary">person_outline</span>
-              </div>
-              <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">
-                {activeUsers} active
-              </span>
-            </div>
-            <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">Registered Users</h3>
-            <p className="text-3xl font-bold mt-1">{totalUsers}</p>
-          </div>
-        </div>
-
-        {/* Headcount Summary */}
-        <div className="mb-10">
-          <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} refreshKey={liveData?.timestamp} />
-        </div>
-
-        {/* Announcements */}
-        <div className="mb-10">
-          <AnnouncementDraft />
-        </div>
-
-        {/* WFH Periods */}
-        <div className="mb-10">
-          <WFHPeriodManager />
-        </div>
-
-        {/* Meal Configuration */}
-        <section className="mb-10 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
-            <h2 className="font-bold text-lg flex items-center gap-2">
-              <span className="material-icons-outlined text-primary">tune</span>
-              Meal Configuration
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Enable or disable optional meal types. Disabled meals are hidden from all employees.
-            </p>
-          </div>
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {MEAL_TYPES.map((mt) => {
-              const isEnabled = mealConfig[mt.value] ?? true;
-              const isAdminControlled = mt.value === 'iftar' || mt.value === 'event_dinner';
-              return (
-                <div
-                  key={mt.value}
-                  className={`flex items-center justify-between p-4 rounded-lg border ${
-                    isAdminControlled
-                      ? 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10'
-                      : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isEnabled ? 'bg-primary/10 text-primary' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
-                      <span className="material-icons-outlined text-sm">
-                        {mt.value === 'lunch' ? 'lunch_dining' : mt.value === 'snacks' ? 'cookie' : mt.value === 'iftar' ? 'brightness_3' : mt.value === 'event_dinner' ? 'celebration' : 'nightlight_round'}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">{mt.label}</p>
-                      <p className="text-xs text-slate-400">
-                        {isAdminControlled ? 'Admin-controlled' : 'Always available'}
-                      </p>
-                    </div>
+        {/* Overview Tab */}
+        {activeTab === 'overview' && (
+          <>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <span className="material-icons-outlined text-primary">group</span>
                   </div>
-                  {isAdminControlled ? (
-                    <button
-                      onClick={() => handleToggleMealConfig(mt.value, isEnabled)}
-                      disabled={mealConfigLoading}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        isEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'
-                      } ${mealConfigLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                          isEnabled ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  ) : (
-                    <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-full">
-                      Always On
-                    </span>
-                  )}
                 </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Special Days Management */}
-        <div className="mb-10">
-          <SpecialDayForm onChanged={() => { fetchSpecialDay(); fetchData(); }} />
-        </div>
-
-        {/* Bulk Actions */}
-        <div className="mb-10">
-          <BulkActionForm scope="all" onDone={fetchData} />
-        </div>
-
-        {/* User Management */}
-        <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h2 className="font-bold text-lg">User Management</h2>
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              {/* Search */}
-              <div className="relative flex-1 sm:flex-initial">
-                <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
-                  <span className="material-icons-outlined text-lg">search</span>
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm w-full sm:w-64 focus:ring-primary focus:border-primary dark:text-white"
-                />
+                <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">Total Headcount</h3>
+                <p className="text-3xl font-bold mt-1">{totalHeadcount}</p>
               </div>
-              {/* Create User Button */}
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
-              >
-                <span className="material-icons-outlined text-lg">person_add</span>
-                Create User
-              </button>
+
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <span className="material-icons-outlined text-primary">restaurant_menu</span>
+                  </div>
+                </div>
+                <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">Meal Types Available</h3>
+                <p className="text-3xl font-bold mt-1">{headcount ? Object.keys(headcount).length : 0}</p>
+              </div>
+
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <span className="material-icons-outlined text-primary">person_outline</span>
+                  </div>
+                  <span className="text-xs font-medium text-slate-500 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-full">
+                    {activeUsers} active
+                  </span>
+                </div>
+                <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium">Registered Users</h3>
+                <p className="text-3xl font-bold mt-1">{totalUsers}</p>
+              </div>
             </div>
+
+            {/* Headcount Summary */}
+            <div className="mb-10">
+              <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} refreshKey={liveData?.timestamp} />
+            </div>
+
+            {/* WFH Periods */}
+            <div className="mb-10">
+              <WFHPeriodManager />
+            </div>
+
+            {/* Bulk Actions */}
+            <div className="mb-10">
+              <BulkActionForm scope="all" onDone={fetchData} />
+            </div>
+          </>
+        )}
+
+        {/* Announcements Tab */}
+        {activeTab === 'announcements' && (
+          <div className="mb-10">
+            <AnnouncementDraft />
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="px-6 py-4 font-semibold">Name</th>
-                  <th className="px-6 py-4 font-semibold">Email</th>
-                  <th className="px-6 py-4 font-semibold">Role</th>
-                  <th className="px-6 py-4 font-semibold">Team</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {filteredUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                    <td className="px-6 py-4">
+        )}
+
+        {/* Event Meals Tab */}
+        {activeTab === 'event_meals' && (
+          <div className="mb-10">
+            <EventMealForm onChanged={fetchData} />
+          </div>
+        )}
+
+        {/* Audit Logs Tab */}
+        {activeTab === 'audit' && (
+          <div className="mb-10 h-150">
+            <AuditLogViewer />
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="space-y-10">
+            {/* Meal Configuration */}
+            <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+              <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700">
+                <h2 className="font-bold text-lg flex items-center gap-2">
+                  <span className="material-icons-outlined text-primary">tune</span>
+                  Meal Configuration
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Enable or disable optional meal types. Disabled meals are hidden from all employees.
+                </p>
+              </div>
+              <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {MEAL_TYPES.map((mt) => {
+                  const isEnabled = mealConfig[mt.value] ?? true;
+                  const isAdminControlled = mt.value === 'iftar' || mt.value === 'event_dinner';
+                  return (
+                    <div
+                      key={mt.value}
+                      className={`flex items-center justify-between p-4 rounded-lg border ${isAdminControlled
+                          ? 'border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10'
+                          : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30'
+                        }`}
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-500 dark:text-slate-300">
-                          {u.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isEnabled ? 'bg-primary/10 text-primary' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
+                          <span className="material-icons-outlined text-sm">
+                            {mt.value === 'lunch' ? 'lunch_dining' : mt.value === 'snacks' ? 'cookie' : mt.value === 'iftar' ? 'brightness_3' : mt.value === 'event_dinner' ? 'celebration' : 'nightlight_round'}
+                          </span>
                         </div>
-                        <span className="text-sm font-medium">{u.name}</span>
+                        <div>
+                          <p className="text-sm font-semibold">{mt.label}</p>
+                          <p className="text-xs text-slate-400">
+                            {isAdminControlled ? 'Admin-controlled' : 'Always available'}
+                          </p>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{u.email}</td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary capitalize">
-                        {u.role?.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{u.team || '—'}</td>
-                    <td className="px-6 py-4">
-                      {u.is_active ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5">Active</span>
-                        </span>
+                      {isAdminControlled ? (
+                        <button
+                          onClick={() => handleToggleMealConfig(mt.value, isEnabled)}
+                          disabled={mealConfigLoading}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'
+                            } ${mealConfigLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isEnabled ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                          />
+                        </button>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-400">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5">Inactive</span>
+                        <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded-full">
+                          Always On
                         </span>
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => openParticipationModal(u)}
-                          title="Update Participation"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors"
-                        >
-                          <span className="material-icons-outlined text-lg">restaurant</span>
-                        </button>
-                        <button
-                          onClick={() => openEditModal(u)}
-                          title="Edit User"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                        >
-                          <span className="material-icons-outlined text-lg">edit</span>
-                        </button>
-                        {u.is_active && (
-                          <button
-                            onClick={() => handleDeactivateUser(u)}
-                            title="Deactivate User"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          >
-                            <span className="material-icons-outlined text-lg">person_off</span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Special Days Management */}
+            <div>
+              <SpecialDayForm onChanged={() => { fetchSpecialDay(); fetchData(); }} />
+            </div>
+
+            {/* Policy Settings Admin Config */}
+            <div>
+              <PolicySettingsForm />
+            </div>
+          </div>
+        )}
+
+        {/* User Management Tab */}
+        {activeTab === 'users' && (
+          <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden mb-10">
+            <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="font-bold text-lg">User Management</h2>
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                {/* Search */}
+                <div className="relative flex-1 sm:flex-initial">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-slate-400">
+                    <span className="material-icons-outlined text-lg">search</span>
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm w-full sm:w-64 focus:ring-primary focus:border-primary dark:text-white"
+                  />
+                </div>
+                {/* Create User Button */}
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
+                >
+                  <span className="material-icons-outlined text-lg">person_add</span>
+                  Create User
+                </button>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">Name</th>
+                    <th className="px-6 py-4 font-semibold">Email</th>
+                    <th className="px-6 py-4 font-semibold">Role</th>
+                    <th className="px-6 py-4 font-semibold">Team</th>
+                    <th className="px-6 py-4 font-semibold">Status</th>
+                    <th className="px-6 py-4 font-semibold text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
-            <span className="text-xs text-slate-500">
-              Showing {filteredUsers.length} of {totalUsers} users
-            </span>
-          </div>
-        </section>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {filteredUsers.map((u) => (
+                    <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-500 dark:text-slate-300">
+                            {u.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+                          </div>
+                          <span className="text-sm font-medium">{u.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{u.email}</td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary capitalize">
+                          {u.role?.replace('_', ' ')}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{u.team || '—'}</td>
+                      <td className="px-6 py-4">
+                        {u.is_active ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5">Active</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5">Inactive</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => openParticipationModal(u)}
+                            title="Update Participation"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors"
+                          >
+                            <span className="material-icons-outlined text-lg">restaurant</span>
+                          </button>
+                          <button
+                            onClick={() => openEditModal(u)}
+                            title="Edit User"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                          >
+                            <span className="material-icons-outlined text-lg">edit</span>
+                          </button>
+                          {u.is_active && (
+                            <button
+                              onClick={() => handleDeactivateUser(u)}
+                              title="Deactivate User"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            >
+                              <span className="material-icons-outlined text-lg">person_off</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-700">
+              <span className="text-xs text-slate-500">
+                Showing {filteredUsers.length} of {totalUsers} users
+              </span>
+            </div>
+          </section>
+        )}
       </main>
 
       {/* ===========================

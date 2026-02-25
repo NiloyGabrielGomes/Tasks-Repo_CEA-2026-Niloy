@@ -75,7 +75,7 @@ export const mealsAPI = {
       is_participating: isParticipating,
     }),
 
- 
+
   batchAdminUpdateParticipation: (updates) =>
     api.post('/api/meals/participation/admin/batch', { updates }),
 
@@ -284,6 +284,64 @@ export const sseAPI = {
     if (date) url += `&date=${encodeURIComponent(date)}`;
     return url;
   },
+};
+
+// ===========================
+// Event Meals API
+// ===========================
+
+export const eventMealsAPI = {
+  create: (date, mealType, note = '') =>
+    api.post('/api/event_meals/', { date, meal_type: mealType, note }),
+
+  list: (startDate = null, endDate = null) =>
+    api.get('/api/event_meals/', {
+      params: {
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(endDate ? { end_date: endDate } : {})
+      },
+    }),
+
+  getToday: () => api.get('/api/event_meals/today'),
+
+  getById: (id) => api.get(`/api/event_meals/${id}`),
+
+  delete: (id) => api.delete(`/api/event_meals/${id}`),
+};
+
+// ===========================
+// Audit Logs API
+// ===========================
+
+export const auditLogsAPI = {
+  list: ({ page = 1, pageSize = 50, actorId = null, targetId = null, action = null, entityType = null, startDate = null, endDate = null } = {}) =>
+    api.get('/api/audit_logs/', {
+      params: {
+        page,
+        page_size: pageSize,
+        ...(actorId ? { actor_id: actorId } : {}),
+        ...(targetId ? { target_id: targetId } : {}),
+        ...(action ? { action } : {}),
+        ...(entityType ? { entity_type: entityType } : {}),
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(endDate ? { end_date: endDate } : {}),
+      },
+    }),
+};
+
+// ===========================
+// Policy Configuration API
+// ===========================
+
+export const policyAPI = {
+  get: () => api.get('/api/policy/'),
+
+  update: ({ cutoffTime, forwardPlanningDays, wfhMonthlyAllowance }) =>
+    api.put('/api/policy/', {
+      ...(cutoffTime !== undefined ? { cutoff_time: cutoffTime } : {}),
+      ...(forwardPlanningDays !== undefined ? { forward_planning_days: forwardPlanningDays } : {}),
+      ...(wfhMonthlyAllowance !== undefined ? { wfh_monthly_allowance: wfhMonthlyAllowance } : {}),
+    }),
 };
 
 export default api;

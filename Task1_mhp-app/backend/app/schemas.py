@@ -921,3 +921,170 @@ class WFHPeriodListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# ===========================
+# Event Meal Schemas
+# ===========================
+
+class EventMealCreate(BaseModel):
+    """Request body for creating a new event meal."""
+    date: date
+    meal_type: str = Field(..., max_length=50, description='e.g. "EventDinner"')
+    note: Optional[str] = Field(None, max_length=500)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-03-05",
+                "meal_type": "EventDinner",
+                "note": "Company 10th Anniversary Dinner"
+            }
+        }
+
+
+class EventMealResponse(BaseModel):
+    id: str
+    date: date
+    meal_type: str
+    note: Optional[str] = None
+    created_by: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "evt-001",
+                "date": "2026-03-05",
+                "meal_type": "EventDinner",
+                "note": "Company 10th Anniversary Dinner",
+                "created_by": "admin-user-id",
+                "created_at": "2026-02-23T10:00:00"
+            }
+        }
+
+
+class EventMealListResponse(BaseModel):
+    event_meals: List[EventMealResponse]
+    total: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "event_meals": [
+                    {
+                        "id": "evt-001",
+                        "date": "2026-03-05",
+                        "meal_type": "EventDinner",
+                        "note": "Company 10th Anniversary Dinner",
+                        "created_by": "admin-user-id",
+                        "created_at": "2026-02-23T10:00:00"
+                    }
+                ],
+                "total": 1
+            }
+        }
+
+
+# ===========================
+# Audit Log Schemas
+# ===========================
+
+class AuditLogActorInfo(BaseModel):
+    """Embedded actor/target info within an audit log entry."""
+    id: str
+    name: str
+    role: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AuditLogEntryResponse(BaseModel):
+    id: str
+    timestamp: datetime
+    actor: Optional[AuditLogActorInfo] = None
+    target_user: Optional[AuditLogActorInfo] = None
+    action: str
+    entity_type: str
+    entity_id: Optional[str] = None
+    field_changed: Optional[str] = None
+    old_value: Optional[str] = None
+    new_value: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "audit-001",
+                "timestamp": "2026-02-23T09:15:00",
+                "actor": {"id": "user-001", "name": "John Doe", "role": "employee"},
+                "target_user": {"id": "user-002", "name": "Jane Smith", "role": None},
+                "action": "update",
+                "entity_type": "meal_participation",
+                "entity_id": "mp-123",
+                "field_changed": "is_participating",
+                "old_value": "true",
+                "new_value": "false"
+            }
+        }
+
+
+class AuditLogListResponse(BaseModel):
+    audit_logs: List[AuditLogEntryResponse]
+    total: int
+    page: int
+    page_size: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "audit_logs": [],
+                "total": 0,
+                "page": 1,
+                "page_size": 50
+            }
+        }
+
+
+# ===========================
+# Policy Config Schemas
+# ===========================
+
+class PolicyConfigUpdate(BaseModel):
+    """Request body for updating policy configuration. All fields optional."""
+    cutoff_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$", description="HH:MM format")
+    forward_planning_days: Optional[int] = Field(None, ge=1)
+    wfh_monthly_allowance: Optional[int] = Field(None, ge=1)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "cutoff_time": "20:00",
+                "forward_planning_days": 10,
+                "wfh_monthly_allowance": 6
+            }
+        }
+
+
+class PolicyConfigResponse(BaseModel):
+    id: str
+    cutoff_time: str
+    forward_planning_days: int
+    wfh_monthly_allowance: int
+    updated_by: Optional[str] = None
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "policy-001",
+                "cutoff_time": "21:00",
+                "forward_planning_days": 7,
+                "wfh_monthly_allowance": 5,
+                "updated_by": "admin-user-id",
+                "updated_at": "2026-02-23T10:00:00"
+            }
+        }

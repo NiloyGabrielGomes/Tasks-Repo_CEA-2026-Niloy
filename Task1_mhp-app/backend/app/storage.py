@@ -8,6 +8,7 @@ from app.models import (
     ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS,
     Announcement, AnnouncementStatus, WFHPeriod,
     ScheduledMealPreference,
+    EventMeal, AuditLogEntry, PolicyConfig,
 )
 from app import utils
 import json
@@ -116,14 +117,27 @@ def update_participation(
         record = session.exec(statement).first()
         
         if record:
-            record.is_participating = is_participating
-            record.updated_by = updated_by
-            record.updated_at = datetime.utcnow()
-            if reason is not None:
-                record.reason = reason
-            session.add(record)
-            session.commit()
-            session.refresh(record)
+            old_participating = record.is_participating
+            if old_participating != is_participating:
+                record.is_participating = is_participating
+                record.updated_by = updated_by
+                record.updated_at = datetime.utcnow()
+                if reason is not None:
+                    record.reason = reason
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+                
+                create_audit_entry(
+                    actor_id=updated_by,
+                    target_user_id=user_id,
+                    action="update",
+                    entity_type="meal_participation",
+                    entity_id=record.id,
+                    field_changed=meal_type.value if hasattr(meal_type, "value") else str(meal_type),
+                    old_value=str(old_participating),
+                    new_value=str(is_participating)
+                )
             return record
         else:
             new_record = MealParticipation(
@@ -138,6 +152,16 @@ def update_participation(
             session.add(new_record)
             session.commit()
             session.refresh(new_record)
+            
+            create_audit_entry(
+                actor_id=updated_by,
+                target_user_id=user_id,
+                action="create",
+                entity_type="meal_participation",
+                entity_id=new_record.id,
+                field_changed=meal_type.value if hasattr(meal_type, "value") else str(meal_type),
+                new_value=str(is_participating)
+            )
             return new_record
 
 
@@ -151,6 +175,7 @@ def bulk_update_participation(
 
     succeeded = 0
     failed = []
+    audit_logs_to_create = []
     
     enabled = get_enabled_meal_types()
 
@@ -172,7 +197,6 @@ def bulk_update_participation(
                     failed.append({"user_id": uid, "error": f"{meal_key} is not enabled"})
                     continue
                 
-                # Update logic inline to reuse the session
                 statement = select(MealParticipation).where(
                     MealParticipation.user_id == uid,
                     MealParticipation.date == target_date,
@@ -181,12 +205,23 @@ def bulk_update_participation(
                 record = session.exec(statement).first()
                 
                 if record:
-                    record.is_participating = participating
-                    record.updated_by = updated_by
-                    record.updated_at = datetime.utcnow()
-                    if reason is not None:
-                        record.reason = reason
-                    session.add(record)
+                    old_participating = record.is_participating
+                    if old_participating != participating:
+                        record.is_participating = participating
+                        record.updated_by = updated_by
+                        record.updated_at = datetime.utcnow()
+                        if reason is not None:
+                            record.reason = reason
+                        session.add(record)
+                        
+                        audit_logs_to_create.append({
+                            "action": "update",
+                            "entity_id": record.id,
+                            "target_user_id": uid,
+                            "field_changed": meal_enum.value,
+                            "old_value": str(old_participating),
+                            "new_value": str(participating)
+                        })
                 else:
                     new_record = MealParticipation(
                         user_id=uid,
@@ -198,12 +233,32 @@ def bulk_update_participation(
                         reason=reason,
                     )
                     session.add(new_record)
+                    session.flush()  # To populate new_record.id
+                    
+                    audit_logs_to_create.append({
+                        "action": "create",
+                        "entity_id": new_record.id,
+                        "target_user_id": uid,
+                        "field_changed": meal_enum.value,
+                        "new_value": str(participating)
+                    })
                 
                 succeeded += 1
         
-        session.commit() # Commit all changes at once at the end
+        session.commit() # Commit all changes at once
+        
+    for log in audit_logs_to_create:
+        create_audit_entry(
+            actor_id=updated_by,
+            target_user_id=log["target_user_id"],
+            action=log["action"],
+            entity_type="meal_participation",
+            entity_id=log["entity_id"],
+            field_changed=log["field_changed"],
+            old_value=log.get("old_value"),
+            new_value=log.get("new_value")
+        )
 
-                
     return succeeded, failed
 
 def get_headcount_by_date(target_date: date) -> Dict[str, int]:
@@ -391,12 +446,25 @@ def set_work_location(
         record = session.exec(statement).first()
         
         if record:
-            record.location = location
-            record.updated_by = updated_by
-            record.updated_at = datetime.utcnow()
-            session.add(record)
-            session.commit()
-            session.refresh(record)
+            old_location = record.location
+            if old_location != location:
+                record.location = location
+                record.updated_by = updated_by
+                record.updated_at = datetime.utcnow()
+                session.add(record)
+                session.commit()
+                session.refresh(record)
+                
+                create_audit_entry(
+                    actor_id=updated_by,
+                    target_user_id=user_id,
+                    action="update",
+                    entity_type="work_location",
+                    entity_id=record.id,
+                    field_changed="location",
+                    old_value=old_location.value if hasattr(old_location, "value") else str(old_location),
+                    new_value=location.value if hasattr(location, "value") else str(location)
+                )
             return record
         else:
             new_record = WorkLocation(
@@ -409,6 +477,16 @@ def set_work_location(
             session.add(new_record)
             session.commit()
             session.refresh(new_record)
+            
+            create_audit_entry(
+                actor_id=updated_by,
+                target_user_id=user_id,
+                action="create",
+                entity_type="work_location",
+                entity_id=new_record.id,
+                field_changed="location",
+                new_value=location.value if hasattr(location, "value") else str(location)
+            )
             return new_record
 
 
@@ -819,3 +897,170 @@ def get_scheduled_meal_preferences_by_date(
         mt = r.meal_type.value if hasattr(r.meal_type, 'value') else str(r.meal_type)
         result.setdefault(r.user_id, {})[mt] = r.is_participating
     return result
+
+
+# ===========================
+# Event Meal Operations 
+# ===========================
+
+def create_event_meal(event_meal: EventMeal) -> EventMeal:
+    """Create a new event meal. Admin only."""
+    with Session(engine) as session:
+        session.add(event_meal)
+        session.commit()
+        session.refresh(event_meal)
+        return event_meal
+
+
+def get_event_meal_by_id(event_meal_id: str) -> Optional[EventMeal]:
+    with Session(engine) as session:
+        return session.get(EventMeal, event_meal_id)
+
+
+def get_event_meals_by_date(target_date: date) -> List[EventMeal]:
+    with Session(engine) as session:
+        stmt = select(EventMeal).where(EventMeal.date == target_date)
+        return session.exec(stmt).all()
+
+
+def get_all_event_meals(
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> List[EventMeal]:
+    with Session(engine) as session:
+        stmt = select(EventMeal)
+        if start_date:
+            stmt = stmt.where(EventMeal.date >= start_date)
+        if end_date:
+            stmt = stmt.where(EventMeal.date <= end_date)
+        stmt = stmt.order_by(EventMeal.date)
+        return session.exec(stmt).all()
+
+
+def delete_event_meal(event_meal_id: str) -> bool:
+    with Session(engine) as session:
+        em = session.get(EventMeal, event_meal_id)
+        if not em:
+            return False
+        session.delete(em)
+        session.commit()
+        return True
+
+
+# ===========================
+# Audit Log Operations 
+# ===========================
+
+def create_audit_entry(
+    actor_id: str,
+    action: str,
+    entity_type: str,
+    entity_id: str | None = None,
+    target_user_id: str | None = None,
+    field_changed: str | None = None,
+    old_value: str | None = None,
+    new_value: str | None = None,
+) -> AuditLogEntry:
+    entry = AuditLogEntry(
+        actor_id=actor_id,
+        target_user_id=target_user_id,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        field_changed=field_changed,
+        old_value=old_value,
+        new_value=new_value,
+    )
+    with Session(engine) as session:
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+        return entry
+
+
+def get_audit_logs(
+    page: int = 1,
+    page_size: int = 50,
+    actor_id: str | None = None,
+    target_user_id: str | None = None,
+    action: str | None = None,
+    entity_type: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+) -> tuple[List[AuditLogEntry], int]:
+    with Session(engine) as session:
+        stmt = select(AuditLogEntry)
+
+        if actor_id:
+            stmt = stmt.where(AuditLogEntry.actor_id == actor_id)
+        if target_user_id:
+            stmt = stmt.where(AuditLogEntry.target_user_id == target_user_id)
+        if action:
+            stmt = stmt.where(AuditLogEntry.action == action)
+        if entity_type:
+            stmt = stmt.where(AuditLogEntry.entity_type == entity_type)
+        if start_date:
+            stmt = stmt.where(AuditLogEntry.timestamp >= datetime.combine(start_date, datetime.min.time()))
+        if end_date:
+            from datetime import time as dt_time
+            stmt = stmt.where(AuditLogEntry.timestamp <= datetime.combine(end_date, dt_time(23, 59, 59)))
+
+        # Get total before pagination
+        all_results = session.exec(stmt.order_by(col(AuditLogEntry.timestamp).desc())).all()
+        total = len(all_results)
+
+        offset = (page - 1) * page_size
+        paginated = all_results[offset: offset + page_size]
+
+        return paginated, total
+
+
+# ===========================
+# Policy Config Operations 
+# ===========================
+
+def get_policy_config() -> PolicyConfig:
+    with Session(engine) as session:
+        config = session.exec(select(PolicyConfig)).first()
+        if config:
+            return config
+
+        # Seed default policy config
+        default = PolicyConfig(
+            cutoff_time="21:00",
+            forward_planning_days=7,
+            wfh_monthly_allowance=5,
+        )
+        session.add(default)
+        session.commit()
+        session.refresh(default)
+        return default
+
+
+def update_policy_config(
+    updated_by: str,
+    cutoff_time: str | None = None,
+    forward_planning_days: int | None = None,
+    wfh_monthly_allowance: int | None = None,
+) -> PolicyConfig:
+    with Session(engine) as session:
+        config = session.exec(select(PolicyConfig)).first()
+        if not config:
+            config = PolicyConfig()
+            session.add(config)
+            session.commit()
+            session.refresh(config)
+
+        if cutoff_time is not None:
+            config.cutoff_time = cutoff_time
+        if forward_planning_days is not None:
+            config.forward_planning_days = forward_planning_days
+        if wfh_monthly_allowance is not None:
+            config.wfh_monthly_allowance = wfh_monthly_allowance
+
+        config.updated_by = updated_by
+        config.updated_at = datetime.utcnow()
+        session.add(config)
+        session.commit()
+        session.refresh(config)
+        return config

@@ -1,5 +1,5 @@
 @echo off
-start "Backend" cmd /k "cd backend && python run.py"
+start "Backend" cmd /k "cd backend && call venv\Scripts\activate && python run.py"
 start "Frontend" cmd /k "cd frontend && npm run dev"
 echo.
 echo Application started!

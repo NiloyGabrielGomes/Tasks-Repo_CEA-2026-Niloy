@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { mealsAPI, specialDaysAPI } from '../services/api';
+import { mealsAPI, specialDaysAPI, eventMealsAPI } from '../services/api';
 import MealCard from './MealCard';
+import EventMealCard from './EventMealCard';
 import SpecialDayBanner from './SpecialDayBanner';
 import WorkLocationSelector from './WorkLocationSelector';
 import WFHPeriodManager from './WFHPeriodManager';
@@ -20,6 +21,7 @@ function fmtDate(d) {
 export default function EmployeeDashboardContent() {
   const { user } = useAuth();
   const [meals, setMeals] = useState([]);
+  const [eventMeals, setEventMeals] = useState([]);
   const [cutoffPassed, setCutoffPassed] = useState(false);
   const [specialDay, setSpecialDay] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -78,9 +80,13 @@ export default function EmployeeDashboardContent() {
   const fetchMeals = async () => {
     setLoading(true);
     try {
-      const res = await mealsAPI.getTodayMeals();
-      setMeals(res.data.meals);
-      setCutoffPassed(res.data.cutoff_passed ?? false);
+      const [mealsRes, eventMealsRes] = await Promise.all([
+        mealsAPI.getTodayMeals(),
+        eventMealsAPI.getToday()
+      ]);
+      setMeals(mealsRes.data.meals);
+      setCutoffPassed(mealsRes.data.cutoff_passed ?? false);
+      setEventMeals(eventMealsRes.data);
       setError('');
     } catch (err) {
       setError('Failed to load meals. Please try again.');
@@ -235,6 +241,13 @@ export default function EmployeeDashboardContent() {
         {/* Today's Meal Cards Grid */}
         <h2 className="text-xl font-semibold mb-4">Today's Meals</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          {eventMeals.length > 0 && eventMeals.map((eventMeal) => (
+            <EventMealCard
+              key={`event-${eventMeal.id}`}
+              eventMeal={eventMeal}
+            />
+          ))}
+
           {meals.map((meal) => (
             <MealCard
               key={meal.id}
@@ -319,11 +332,10 @@ export default function EmployeeDashboardContent() {
                             [m.meal_type]: !prev[m.meal_type],
                           }))
                         }
-                        className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                          active
+                        className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${active
                             ? 'bg-primary text-white border-primary'
                             : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
-                        }`}
+                          }`}
                       >
                         {m.meal_type.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                         <span className="ml-1">{active ? '✓' : '✕'}</span>
