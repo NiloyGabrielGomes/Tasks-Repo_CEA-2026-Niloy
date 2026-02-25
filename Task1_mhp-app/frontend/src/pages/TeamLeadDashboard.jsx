@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { mealsAPI, usersAPI, specialDaysAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import useHeadcountStream from '../hooks/useHeadcountStream';
 import Navbar from '../components/Navbar';
 import HeadcountTable from '../components/HeadcountTable';
 import SpecialDayBanner from '../components/SpecialDayBanner';
 import BulkActionForm from '../components/BulkActionForm';
+import AnnouncementDraft from '../components/AnnouncementDraft';
+import WFHPeriodManager from '../components/WFHPeriodManager';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -40,6 +43,10 @@ export default function TeamLeadDashboard() {
   // Special day
   const [specialDay, setSpecialDay] = useState(null);
 
+  // ── SSE live headcount ───────────────────────────────────────
+  const { headcount: liveData } = useHeadcountStream(selectedDate);
+  const prevLiveTimestampRef = useRef(null);
+
   useEffect(() => {
     fetchData();
     fetchSpecialDay();
@@ -53,6 +60,27 @@ export default function TeamLeadDashboard() {
       setSpecialDay(null);
     }
   };
+
+  // Silent headcount-only refresh triggered by SSE (no loading spinner)
+  const refreshHeadcount = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const headcountRes = selectedDate === today
+        ? await mealsAPI.getTeamHeadcountToday()
+        : await mealsAPI.getTeamHeadcount(selectedDate);
+      setHeadcount(headcountRes.data.headcount);
+    } catch {
+      // non-critical, ignore
+    }
+  }, [selectedDate]);
+
+  // Re-fetch when SSE signals a headcount change
+  useEffect(() => {
+    if (!liveData?.timestamp) return;
+    if (liveData.timestamp === prevLiveTimestampRef.current) return;
+    prevLiveTimestampRef.current = liveData.timestamp;
+    refreshHeadcount();
+  }, [liveData, refreshHeadcount]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -238,7 +266,17 @@ export default function TeamLeadDashboard() {
 
         {/* Headcount Summary */}
         <div className="mb-10">
-          <HeadcountTable headcount={headcount} totalUsers={activeUsers} />
+          <HeadcountTable headcount={headcount} totalUsers={activeUsers} date={selectedDate} refreshKey={liveData?.timestamp} />
+        </div>
+
+        {/* Announcements */}
+        <div className="mb-10">
+          <AnnouncementDraft />
+        </div>
+
+        {/* WFH Periods */}
+        <div className="mb-10">
+          <WFHPeriodManager />
         </div>
 
         {/* Bulk Actions */}

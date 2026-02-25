@@ -1,7 +1,8 @@
 from datetime import datetime, date
 from typing import Optional, Dict, List
 from pydantic import BaseModel, Field, EmailStr
-from app.models import UserRole, MealType, WorkLocationType, DayType
+from pydantic import ConfigDict
+from app.models import UserRole, MealType, WorkLocationType, DayType, AnnouncementStatus, WFHPeriod
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -37,24 +38,23 @@ class LoginResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True, json_schema_extra={
+        "example": {
+            "id": "123456",
+            "name": "John Doe",
+            "email": "john.doe@example.com",
+            "role": "employee",
+            "team": "Midas",
+            "is_active": True
+        }
+    })
+
     id: str
     name: str
     email: EmailStr
     role: UserRole
     team: Optional[str] = None
     is_active: bool = True
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": "123456",
-                "name": "John Doe",
-                "email": "john.doe@example.com",
-                "role": "employee",
-                "team": "Midas",
-                "is_active": True
-            }
-        }
 
 class UserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
@@ -110,25 +110,10 @@ class UserUpdate(BaseModel):
 
 
 class UserListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     users: list[UserResponse]
     total: int
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "users": [
-                    {
-                        "id": "user-1",
-                        "name": "John Doe",
-                        "email": "john@company.com",
-                        "role": "Employee",
-                        "team": "Engineering",
-                        "is_active": True
-                    }
-                ],
-                "total": 1
-            }
-        }
 
 
 class UserCreateResponse(BaseModel):
@@ -509,6 +494,89 @@ class HeadcountResponse(BaseModel):
         }
 
 
+# ===========================
+# Headcount Breakdown Schemas (6A-1 / 6A-2)
+# ===========================
+
+class HeadcountMemberEntry(BaseModel):
+    user_id: str
+    name: str
+    email: str
+    location: Optional[str] = None   # populated in by-team response
+    team: Optional[str] = None       # populated in by-location response
+
+
+class HeadcountTeamEntry(BaseModel):
+    team: str
+    total_members: int
+    office_count: int
+    wfh_count: int
+    members: List[HeadcountMemberEntry]
+
+
+class HeadcountByTeamResponse(BaseModel):
+    date: date
+    total_employees: int
+    teams: List[HeadcountTeamEntry]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-02-21",
+                "total_employees": 30,
+                "teams": [
+                    {
+                        "team": "Engineering",
+                        "total_members": 10,
+                        "office_count": 7,
+                        "wfh_count": 3,
+                        "members": [
+                            {"user_id": "u1", "name": "Alice", "email": "alice@co.com", "location": "Office"}
+                        ]
+                    }
+                ]
+            }
+        }
+
+
+class HeadcountLocationEntry(BaseModel):
+    location: str
+    count: int
+    employees: List[HeadcountMemberEntry]
+
+
+class HeadcountByLocationResponse(BaseModel):
+    date: date
+    total_employees: int
+    office_count: int
+    wfh_count: int
+    locations: List[HeadcountLocationEntry]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "date": "2026-02-21",
+                "total_employees": 30,
+                "office_count": 22,
+                "wfh_count": 8,
+                "locations": [
+                    {
+                        "location": "Office",
+                        "count": 22,
+                        "employees": [
+                            {"user_id": "u1", "name": "Alice", "email": "alice@co.com", "team": "Engineering"}
+                        ]
+                    },
+                    {
+                        "location": "WFH",
+                        "count": 8,
+                        "employees": []
+                    }
+                ]
+            }
+        }
+
+
 class MessageResponse(BaseModel):
     message: str
 
@@ -576,7 +644,7 @@ class WorkLocationResponse(BaseModel):
     date: date
     location: str
     updated_by: Optional[str] = None
-    updated_at: datetime
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attribute = True
@@ -698,3 +766,122 @@ class SpecialDayListResponse(BaseModel):
                 "total": 1
             }
         }
+
+
+# ===========================
+# Announcement Schemas
+# ===========================
+
+class AnnouncementCreate(BaseModel):
+    """Request body for creating a new announcement draft."""
+    title: str = Field(..., min_length=1, max_length=255)
+    body: str = Field(..., min_length=1)
+    audience: str = Field(default="all", description='"all", "team_leads", or a specific team name')
+    scheduled_at: Optional[datetime] = Field(None, description="ISO datetime to schedule; omit for immediate publish")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "title": "Office closed tomorrow",
+                "body": "Due to a public holiday the office will be closed on Feb 22.",
+                "audience": "all",
+                "scheduled_at": None
+            }
+        }
+
+
+class AnnouncementPublishRequest(BaseModel):
+    scheduled_at: Optional[datetime] = Field(None, description="Supply to schedule; omit to publish immediately")
+
+    class Config:
+        json_schema_extra = {
+            "example": {"scheduled_at": "2026-02-22T09:00:00"}
+        }
+
+
+class AnnouncementResponse(BaseModel):
+    id: str
+    title: str
+    body: str
+    audience: str
+    status: str
+    scheduled_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_schema_extra = {
+            "example": {
+                "id": "ann-001",
+                "title": "Office closed tomorrow",
+                "body": "Due to a public holiday the office will be closed.",
+                "audience": "all",
+                "status": "draft",
+                "scheduled_at": None,
+                "published_at": None,
+                "created_by": "user-id",
+                "created_at": "2026-02-21T10:00:00",
+                "updated_at": "2026-02-21T10:00:00"
+            }
+        }
+
+
+class AnnouncementListResponse(BaseModel):
+    announcements: List[AnnouncementResponse]
+    total: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "announcements": [],
+                "total": 0
+            }
+        }
+
+
+# ── WFH Period schemas ─────────────────────────────────────────
+
+class WFHPeriodCreate(BaseModel):
+    employee_id: str
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "employee_id": "uuid-here",
+                "start_date": "2026-03-01",
+                "end_date": "2026-03-05",
+                "reason": "Personal appointment"
+            }
+        }
+
+
+class WFHPeriodUpdate(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    reason: Optional[str] = None
+
+
+class WFHPeriodResponse(BaseModel):
+    id: str
+    employee_id: str
+    employee_name: Optional[str] = None
+    employee_team: Optional[str] = None
+    start_date: date
+    end_date: date
+    reason: Optional[str] = None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class WFHPeriodListResponse(BaseModel):
+    periods: List[WFHPeriodResponse]
+    total: int
+    page: int
+    page_size: int

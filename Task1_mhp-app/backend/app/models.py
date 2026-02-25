@@ -67,6 +67,43 @@ class SpecialDay(SQLModel, table=True):
     created_by: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+
+class AnnouncementStatus(str, Enum):
+    DRAFT = "draft"
+    SCHEDULED = "scheduled"
+    SENT = "sent"
+
+
+class AnnouncementAudience(str, Enum):
+    ALL = "all"
+    TEAM_LEADS = "team_leads"
+
+
+class Announcement(SQLModel, table=True):
+    """An announcement that can be drafted, scheduled, or sent to employees."""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    title: str = Field(min_length=1, max_length=255)
+    body: str
+    audience: str = Field(default="all", max_length=100)
+    status: AnnouncementStatus = Field(default=AnnouncementStatus.DRAFT, index=True)
+    scheduled_at: Optional[datetime] = Field(default=None)
+    published_at: Optional[datetime] = Field(default=None)
+    created_by: str = Field(foreign_key="user.id", index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class WFHPeriod(SQLModel, table=True):
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), primary_key=True)
+    employee_id: str = Field(foreign_key="user.id", index=True)
+    start_date: dt_date = Field(index=True)
+    end_date: dt_date = Field(index=True)
+    reason: Optional[str] = Field(default=None, max_length=500)
+    created_by: str = Field(foreign_key="user.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 DEFAULT_OPTED_IN_MEALS = {
     MealType.LUNCH,
     MealType.SNACKS,

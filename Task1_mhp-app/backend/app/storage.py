@@ -3,9 +3,10 @@ from typing import Optional, Dict, List
 from sqlmodel import Session, select, col
 from app.database import engine
 from app.models import (
-    User, MealParticipation, MealType, WorkLocation, WorkLocationType, 
-    SpecialDay, DayType, create_default_participation, 
-    ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS
+    User, MealParticipation, MealType, WorkLocation, WorkLocationType,
+    SpecialDay, DayType, create_default_participation,
+    ADMIN_CONTROLLED_MEALS, DEFAULT_OPTED_IN_MEALS,
+    Announcement, AnnouncementStatus, WFHPeriod,
 )
 from app import utils
 import json
@@ -244,6 +245,103 @@ def get_headcount_by_date_and_team(target_date: date, team: str) -> Dict[str, in
             
         return headcount
 
+def get_headcount_by_team_breakdown(
+    target_date: date,
+    team_filter: Optional[str] = None,
+) -> List[Dict]:
+    
+    all_users = get_all_users()
+    active_users = [u for u in all_users if u.is_active]
+
+    work_locations = get_work_locations_by_date(target_date)
+    location_map: Dict[str, WorkLocationType] = {wl.user_id: wl.location for wl in work_locations}
+
+    # Group by team
+    teams_map: Dict[str, List[User]] = {}
+    for user in active_users:
+        team_name = user.team or "Unassigned"
+        if team_filter and team_name.lower() != team_filter.lower():
+            continue
+        teams_map.setdefault(team_name, []).append(user)
+
+    result = []
+    for team_name, members in sorted(teams_map.items()):
+        office_count = 0
+        wfh_count = 0
+        member_data = []
+        for u in members:
+            raw_loc = location_map.get(u.id, WorkLocationType.OFFICE)
+            loc_val = raw_loc.value if hasattr(raw_loc, "value") else str(raw_loc)
+            if loc_val == WorkLocationType.WFH.value:
+                wfh_count += 1
+            else:
+                office_count += 1
+            member_data.append({
+                "user_id": u.id,
+                "name": u.name,
+                "email": u.email,
+                "location": loc_val,
+            })
+        result.append({
+            "team": team_name,
+            "total_members": len(members),
+            "office_count": office_count,
+            "wfh_count": wfh_count,
+            "members": member_data,
+        })
+    return result
+
+
+def get_headcount_by_location_breakdown(
+    target_date: date,
+    team_filter: Optional[str] = None,
+) -> Dict:
+    
+    all_users = get_all_users()
+    active_users = [u for u in all_users if u.is_active]
+
+    if team_filter:
+        active_users = [u for u in active_users if u.team and u.team.lower() == team_filter.lower()]
+
+    work_locations = get_work_locations_by_date(target_date)
+    location_map: Dict[str, WorkLocationType] = {wl.user_id: wl.location for wl in work_locations}
+
+    office_employees: List[Dict] = []
+    wfh_employees: List[Dict] = []
+
+    for user in active_users:
+        raw_loc = location_map.get(user.id, WorkLocationType.OFFICE)
+        loc_val = raw_loc.value if hasattr(raw_loc, "value") else str(raw_loc)
+        entry = {
+            "user_id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "team": user.team or "Unassigned",
+        }
+        if loc_val == WorkLocationType.WFH.value:
+            wfh_employees.append(entry)
+        else:
+            office_employees.append(entry)
+
+    return {
+        "total": len(active_users),
+        "office_count": len(office_employees),
+        "wfh_count": len(wfh_employees),
+        "locations": [
+            {
+                "location": WorkLocationType.OFFICE.value,
+                "count": len(office_employees),
+                "employees": office_employees,
+            },
+            {
+                "location": WorkLocationType.WFH.value,
+                "count": len(wfh_employees),
+                "employees": wfh_employees,
+            },
+        ],
+    }
+
+
 def initialize_daily_participation(target_date: date) -> None:
     all_users = get_all_users()
     
@@ -469,3 +567,172 @@ def is_participation_blocked(target_date: date) -> tuple[bool, str | None]:
         return True, reason
 
     return False, None
+
+
+# ===========================
+# Announcement Operations 
+# ===========================
+
+def create_announcement(announcement: Announcement) -> Announcement:
+    with Session(engine) as session:
+        session.add(announcement)
+        session.commit()
+        session.refresh(announcement)
+        return announcement
+
+
+def get_announcement_by_id(announcement_id: str) -> Optional[Announcement]:
+    with Session(engine) as session:
+        return session.get(Announcement, announcement_id)
+
+
+def get_announcements(
+    created_by: str,
+    status_filter: Optional[str] = None,
+) -> List[Announcement]:
+
+    with Session(engine) as session:
+        stmt = select(Announcement).where(Announcement.created_by == created_by)
+        if status_filter:
+            try:
+                status_enum = AnnouncementStatus(status_filter)
+                stmt = stmt.where(Announcement.status == status_enum)
+            except ValueError:
+                pass  # unknown status → return unfiltered
+        stmt = stmt.order_by(col(Announcement.created_at).desc())
+        return session.exec(stmt).all()
+
+
+def publish_announcement(
+    announcement_id: str,
+    scheduled_at: Optional[datetime] = None,
+) -> Optional[Announcement]:
+
+    with Session(engine) as session:
+        ann = session.get(Announcement, announcement_id)
+        if not ann:
+            return None
+        if ann.status == AnnouncementStatus.SENT:
+            return ann  # idempotent — already sent
+
+        now = datetime.utcnow()
+        if scheduled_at and scheduled_at > now:
+            ann.status = AnnouncementStatus.SCHEDULED
+            ann.scheduled_at = scheduled_at
+        else:
+            ann.status = AnnouncementStatus.SENT
+            ann.published_at = now
+            ann.scheduled_at = None
+
+        ann.updated_at = now
+        session.add(ann)
+        session.commit()
+        session.refresh(ann)
+        return ann
+
+
+# ===========================
+# WFH Period Operations
+# ===========================
+
+def _periods_overlap(a_start: date, a_end: date, b_start: date, b_end: date) -> bool:
+    return a_start <= b_end and a_end >= b_start
+
+
+def get_overlapping_wfh_periods(
+    employee_id: str,
+    start_date: date,
+    end_date: date,
+    exclude_id: str | None = None,
+) -> List[WFHPeriod]:
+    with Session(engine) as session:
+        stmt = select(WFHPeriod).where(
+            WFHPeriod.employee_id == employee_id,
+            WFHPeriod.start_date <= end_date,
+            WFHPeriod.end_date >= start_date,
+        )
+        if exclude_id:
+            stmt = stmt.where(WFHPeriod.id != exclude_id)
+        return session.exec(stmt).all()
+
+
+def create_wfh_period(period: WFHPeriod) -> WFHPeriod:
+    with Session(engine) as session:
+        session.add(period)
+        session.commit()
+        session.refresh(period)
+        return period
+
+
+def get_wfh_period_by_id(period_id: str) -> Optional[WFHPeriod]:
+    with Session(engine) as session:
+        return session.get(WFHPeriod, period_id)
+
+
+def get_wfh_periods(
+    employee_id: str | None = None,
+    team: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[List[WFHPeriod], int]:
+
+    with Session(engine) as session:
+        stmt = select(WFHPeriod)
+
+        if employee_id:
+            stmt = stmt.where(WFHPeriod.employee_id == employee_id)
+
+        if team:
+            # Only include periods whose employee belongs to the given team
+            user_ids_in_team = [
+                u.id for u in session.exec(
+                    select(User).where(User.team == team)
+                ).all()
+            ]
+            stmt = stmt.where(col(WFHPeriod.employee_id).in_(user_ids_in_team))
+
+        if start_date:
+            stmt = stmt.where(WFHPeriod.end_date >= start_date)
+
+        if end_date:
+            stmt = stmt.where(WFHPeriod.start_date <= end_date)
+
+        all_results = session.exec(stmt.order_by(WFHPeriod.start_date)).all()
+        total = len(all_results)
+        offset = (page - 1) * page_size
+        return all_results[offset: offset + page_size], total
+
+
+def update_wfh_period(
+    period_id: str,
+    start_date: date | None,
+    end_date: date | None,
+    reason: str | None,
+) -> Optional[WFHPeriod]:
+    with Session(engine) as session:
+        period = session.get(WFHPeriod, period_id)
+        if not period:
+            return None
+        if start_date is not None:
+            period.start_date = start_date
+        if end_date is not None:
+            period.end_date = end_date
+        if reason is not None:
+            period.reason = reason
+        period.updated_at = datetime.utcnow()
+        session.add(period)
+        session.commit()
+        session.refresh(period)
+        return period
+
+
+def delete_wfh_period(period_id: str) -> bool:
+    with Session(engine) as session:
+        period = session.get(WFHPeriod, period_id)
+        if not period:
+            return False
+        session.delete(period)
+        session.commit()
+        return True

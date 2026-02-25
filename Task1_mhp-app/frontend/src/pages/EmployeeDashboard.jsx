@@ -4,6 +4,8 @@ import { mealsAPI, specialDaysAPI } from '../services/api';
 import Navbar from '../components/Navbar';
 import MealCard from '../components/MealCard';
 import SpecialDayBanner from '../components/SpecialDayBanner';
+import WorkLocationSelector from '../components/WorkLocationSelector';
+import WFHPeriodManager from '../components/WFHPeriodManager';
 import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -14,6 +16,7 @@ export default function EmployeeDashboard() {
   const [specialDay, setSpecialDay] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [workLocation, setWorkLocation] = useState('Office');
 
   const today = new Date();
   const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -82,6 +85,31 @@ export default function EmployeeDashboard() {
     }
   };
 
+  const handleLocationChange = async (newLocation) => {
+    setWorkLocation(newLocation);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    if (newLocation === 'WFH') {
+      // Opt the employee out of every enabled meal using their own per-meal endpoint
+      const enabledMeals = meals.filter((m) => m.is_participating);
+      if (enabledMeals.length > 0) {
+        try {
+          await Promise.all(
+            enabledMeals.map((m) =>
+              mealsAPI.updateParticipation(user.id, todayStr, m.meal_type, false)
+            )
+          );
+          setMeals((prev) => prev.map((m) => ({ ...m, is_participating: false })));
+        } catch {
+          setError('Location saved, but failed to update meal preferences.');
+        }
+      }
+    } else {
+      // Back to Office — re-fetch so user sees their actual current state
+      await fetchMeals();
+    }
+  };
+
   const selectedCount = meals.filter((m) => m.is_participating).length;
 
   if (loading) return <Loading />;
@@ -120,10 +148,36 @@ export default function EmployeeDashboard() {
           </div>
         )}
 
+        {/* Work Location Selector */}
+        {!isBlocked && (
+          <div className="mb-8">
+            <WorkLocationSelector
+              disabled={cutoffPassed}
+              onLoad={(loc) => setWorkLocation(loc)}
+              onChange={handleLocationChange}
+            />
+          </div>
+        )}
+
+        {/* WFH Meal Notice */}
+        {workLocation === 'WFH' && !isBlocked && (
+          <div className="mb-6 bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-700 rounded-xl p-4 flex items-center gap-3">
+            <span className="material-icons-outlined text-sky-500">home</span>
+            <p className="text-sky-800 dark:text-sky-200 text-sm font-medium">
+              You're working from home — meals have been opted out automatically. Switch to Office to re-enable.
+            </p>
+          </div>
+        )}
+
         {/* Meal Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {meals.map((meal) => (
-            <MealCard key={meal.id} meal={meal} onToggle={handleToggle} disabled={cutoffPassed || isBlocked} />
+            <MealCard
+              key={meal.id}
+              meal={meal}
+              onToggle={handleToggle}
+              disabled={cutoffPassed || isBlocked || workLocation === 'WFH'}
+            />
           ))}
         </div>
 
@@ -144,6 +198,11 @@ export default function EmployeeDashboard() {
             <div className="absolute -right-12 -bottom-12 w-48 h-48 bg-white/10 rounded-full blur-3xl"></div>
             <div className="absolute -left-12 -top-12 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
           </div>
+        </div>
+
+        {/* WFH Periods */}
+        <div className="mt-10">
+          <WFHPeriodManager />
         </div>
       </main>
 

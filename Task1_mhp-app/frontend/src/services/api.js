@@ -181,12 +181,91 @@ export const specialDaysAPI = {
 };
 
 // ===========================
+// Headcount Breakdown API
+// ===========================
+
+export const headcountAPI = {
+  byTeam: (targetDate, team = null) =>
+    api.get('/api/headcount/by-team', {
+      params: { target_date: targetDate, ...(team ? { team } : {}) },
+    }),
+
+  byLocation: (targetDate, team = null) =>
+    api.get('/api/headcount/by-location', {
+      params: { target_date: targetDate, ...(team ? { team } : {}) },
+    }),
+};
+
+// ===========================
+// Announcements API
+// ===========================
+
+export const announcementsAPI = {
+  createDraft: (title, body, audience, scheduledAt = null) =>
+    api.post('/api/announcements/draft', {
+      title,
+      body,
+      audience,
+      ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+    }),
+
+  list: (statusFilter = null) =>
+    api.get('/api/announcements/drafts', {
+      params: statusFilter ? { status: statusFilter } : {},
+    }),
+
+  publish: (id, scheduledAt = null) =>
+    api.post(`/api/announcements/${id}/publish`, {
+      ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+    }),
+};
+
+// ===========================
+// WFH Periods API
+// ===========================
+
+export const wfhPeriodsAPI = {
+  list: ({ employeeId = null, team = null, startDate = null, endDate = null, page = 1, pageSize = 50 } = {}) =>
+    api.get('/api/wfh-periods', {
+      params: {
+        ...(employeeId ? { employee_id: employeeId } : {}),
+        ...(team ? { team } : {}),
+        ...(startDate ? { start_date: startDate } : {}),
+        ...(endDate ? { end_date: endDate } : {}),
+        page,
+        page_size: pageSize,
+      },
+    }),
+
+  create: ({ employeeId, startDate, endDate, reason = null }) =>
+    api.post('/api/wfh-periods', {
+      employee_id: employeeId,
+      start_date: startDate,
+      end_date: endDate,
+      ...(reason ? { reason } : {}),
+    }),
+
+  update: (id, { startDate = null, endDate = null, reason = null }) =>
+    api.patch(`/api/wfh-periods/${id}`, {
+      ...(startDate ? { start_date: startDate } : {}),
+      ...(endDate ? { end_date: endDate } : {}),
+      ...(reason !== null ? { reason } : {}),
+    }),
+
+  delete: (id) => api.delete(`/api/wfh-periods/${id}`),
+};
+
+// ===========================
 // SSE Helpers
 // ===========================
 
 export const sseAPI = {
-  getStreamUrl: (date = null) => {
-    const token = localStorage.getItem('access_token');
+  /** Fetch a short-lived (60 s), single-use token for the SSE stream. */
+  getSseToken: () => api.get('/api/auth/sse-token').then((r) => r.data),
+
+  /** Build the SSE stream URL after obtaining a fresh token. */
+  getStreamUrl: async (date = null) => {
+    const { token } = await sseAPI.getSseToken();
     let url = `${API_BASE_URL}/api/stream/headcount?token=${encodeURIComponent(token)}`;
     if (date) url += `&date=${encodeURIComponent(date)}`;
     return url;
