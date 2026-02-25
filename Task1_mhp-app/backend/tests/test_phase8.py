@@ -205,3 +205,89 @@ class TestPolicyConfig:
         r = client.get("/api/policy/", headers=_auth(token))
         assert r.status_code == 200
         assert "cutoff_time" in r.json()
+
+class TestFeature4ForwardWindowAndCutoff:
+    def test_forward_window_bounds(self, client, test_db):
+        """Test that date endpoints enforce forward_planning_days from PolicyConfig."""
+        # 1. Create a user
+        _create_user(test_db, "fw@test.com", "pass1234", UserRole.EMPLOYEE, "FW User")
+        token = _login(client, "fw@test.com", "pass1234")
+        user_res = client.get("/api/users/me", headers=_auth(token))
+        user_id = user_res.json()["id"]
+
+        # 2. Get policy config
+        pol_res = client.get("/api/policy/", headers=_auth(token))
+        forward_days = pol_res.json()["forward_planning_days"]
+
+        # 3. Calculate an invalid future date
+        import datetime
+        from app import utils
+        today = utils.get_today()
+        invalid_date = today + datetime.timedelta(days=forward_days + 1)
+        invalid_date_str = invalid_date.isoformat()
+
+        # 4. Attempt to update participation for that invalid date
+        update_res = client.put(
+            f"/api/meals/{user_id}/{invalid_date_str}/lunch",
+            json={"is_participating": True},
+            headers=_auth(token)
+        )
+        assert update_res.status_code == 400
+        assert "forward planning window" in update_res.json()["detail"]
+
+    def test_dynamic_cutoff_enforcement(self, client, test_db):
+        """Test that cutoff_time in PolicyConfig is respected."""
+        # 1. Setup
+        _create_user(test_db, "cutoff@test.com", "pass1234", UserRole.ADMIN, "Admin User")
+        admin_token = _login(client, "cutoff@test.com", "pass1234")
+        
+        _create_user(test_db, "empcut@test.com", "pass1234", UserRole.EMPLOYEE, "Emp User")
+        emp_token = _login(client, "empcut@test.com", "pass1234")
+        emp_res = client.get("/api/users/me", headers=_auth(emp_token))
+        emp_id = emp_res.json()["id"]
+
+        import datetime
+        from app import utils
+        today_str = utils.get_today().isoformat()
+        current_hour = datetime.datetime.now().hour
+
+        # 2. Change cutoff time to be in the past (e.g., current hour - 1)
+        # If current_hour is 0, we can't reliably test this today without freeze_time
+        # but we can try setting it to 00:00 (which is always past unless it's exactly midnight)
+        cutoff_hour = max(0, current_hour - 1)
+        cutoff_time_str = f"{cutoff_hour:02d}:00"
+        
+        pol_update = client.put(
+            "/api/policy/",
+            json={"cutoff_time": cutoff_time_str, "forward_planning_days": 7, "wfh_monthly_allowance": 5},
+            headers=_auth(admin_token)
+        )
+        assert pol_update.status_code == 200
+
+        # 3. Try to update participation as employee for today (should be blocked)
+        update_res = client.put(
+            f"/api/meals/{emp_id}/{today_str}/lunch",
+            json={"is_participating": True},
+            headers=_auth(emp_token)
+        )
+        assert update_res.status_code == 403
+        assert "locked after" in update_res.json()["detail"]
+
+        # 4. Change cutoff to be in the future
+        future_cutoff_hour = min(23, current_hour + 1)
+        if current_hour < 23:
+            future_cutoff_time_str = f"{future_cutoff_hour:02d}:00"
+            pol_update2 = client.put(
+                "/api/policy/",
+                json={"cutoff_time": future_cutoff_time_str, "forward_planning_days": 7, "wfh_monthly_allowance": 5},
+                headers=_auth(admin_token)
+            )
+            assert pol_update2.status_code == 200
+
+            # Should succeed now
+            update_res2 = client.put(
+                f"/api/meals/{emp_id}/{today_str}/lunch",
+                json={"is_participating": True},
+                headers=_auth(emp_token)
+            )
+            assert update_res2.status_code == 200

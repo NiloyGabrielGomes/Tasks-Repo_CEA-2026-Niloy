@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { mealsAPI, specialDaysAPI, eventMealsAPI } from '../services/api';
+import { mealsAPI, specialDaysAPI, eventMealsAPI, policyAPI } from '../services/api';
 import MealCard from './MealCard';
 import EventMealCard from './EventMealCard';
 import SpecialDayBanner from './SpecialDayBanner';
@@ -37,6 +37,7 @@ export default function EmployeeDashboardContent() {
   const [rangeMeals, setRangeMeals] = useState({});
   const [rangeLoading, setRangeLoading] = useState(false);
   const [rangeResult, setRangeResult] = useState(null);
+  const [maxForwardDateStr, setMaxForwardDateStr] = useState('');
 
   const today = new Date();
   const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
@@ -54,7 +55,21 @@ export default function EmployeeDashboardContent() {
   useEffect(() => {
     fetchMeals();
     fetchSpecialDay();
+    fetchPolicy();
   }, []);
+
+  const fetchPolicy = async () => {
+    try {
+      const res = await policyAPI.get();
+      if (res.data?.forward_planning_days) {
+        const d = new Date();
+        d.setDate(d.getDate() + res.data.forward_planning_days);
+        setMaxForwardDateStr(fmtDate(d));
+      }
+    } catch {
+      // Ignore if fails
+    }
+  };
 
   // Initialise rangeMeals toggles from loaded meals (all opt-in by default)
   useEffect(() => {
@@ -291,6 +306,7 @@ export default function EmployeeDashboardContent() {
                     type="date"
                     value={rangeStart}
                     min={todayStr}
+                    max={maxForwardDateStr || undefined}
                     onChange={(e) => setRangeStart(e.target.value)}
                     className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-2 focus:ring-primary"
                   />
@@ -303,6 +319,7 @@ export default function EmployeeDashboardContent() {
                     type="date"
                     value={rangeEnd}
                     min={rangeStart}
+                    max={maxForwardDateStr || undefined}
                     onChange={(e) => setRangeEnd(e.target.value)}
                     className="border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-white focus:ring-2 focus:ring-primary"
                   />
@@ -333,8 +350,8 @@ export default function EmployeeDashboardContent() {
                           }))
                         }
                         className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${active
-                            ? 'bg-primary text-white border-primary'
-                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600'
                           }`}
                       >
                         {m.meal_type.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
