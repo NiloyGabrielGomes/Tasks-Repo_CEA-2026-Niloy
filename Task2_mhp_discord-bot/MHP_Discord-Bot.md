@@ -44,3 +44,31 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 
 ---
 
+## Scope of changes
+- **Discord Bot**: Application commands (slash commands) and interactive message components for user updates and admin summaries.
+- **Backend API**: Endpoints to serve summary data to the dashboard and trigger async summary generation tasks.
+
+## Requirements
+### Functional requirements
+- Employees can update meal participation and work location (Office/WFH) for a selected date via the bot.
+- The bot replies with a status summary after each update.
+- TLs can request a team-level summary for a selected date via the bot.
+- Admins/Logistics can request overall headcount summaries for a selected date via the bot.
+- Admin/Logistics dashboard displays meal totals, location splits (Office vs WFH), and special day indicators.
+- TL dashboard displays team participation list and rollups.
+- Dashboard updates immediately as filters (date, meal type, WFH) or employee changes.
+- Admin can trigger an async daily summary generation process which reflects its state ("in progress" -> "ready") in the UI/Bot.
+
+### Role-based behavior
+- **Employee**: Can only read and update their own meal and location status.
+- **Team Lead (TL)**: Can view team-level summaries and individual statuses within their team.
+- **Admin/Logistics**: Can view all summaries, overall stats, and trigger async report generations.
+
+### Validation rules + edge cases
+- Updates past the cut-off time or for past dates are not permitted.
+- Handle concurrent filter changes on the UI gracefully.
+- WFH is only set to 5 days a month
+
+### Definition of Done
+- Discord bot responds to slash commands accurately.
+- Async report generation operates 
