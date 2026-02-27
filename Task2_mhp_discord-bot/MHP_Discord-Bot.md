@@ -25,7 +25,7 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 - Implement a Discord bot for employees to self-update meal participation and work location (Office/WFH) for a given date.
 - Enable Team Leads and Admins/Logistics to fetch daily rollups and summaries via the Discord bot.
 - Develop a component-based web dashboard with live updates, shared state, and rich data views (meal totals, work location splits, special days).
-- Implement async processing for daily summary generation triggered by admins.
+- Implement serverless on-demand summary generation (Lambda + EventBridge) triggered by admins.
 - Cutoff time configurable by admin (default: 9 PM Dhaka time)
 
 ### Non-goals
@@ -37,16 +37,16 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 
 ## Tech stack and rationale (short)
 - **Backend language/runtime**: Python 3.12.x – Language of choice for backend and discord bot.
-- **Framework**: FastAPI - Native async support crucial for real-time WebSocket connections
-- **Data store**: S3 file storage – Temporary data storage. DynamoDB - Planned for future storage integration
-- **Infra/deploy**: AWS – ensures production-grade deployment, simple CI/CD pipeline, and reproducible infrastructure.
-- **Integrations**: Discord API (discord.py) – directly interfaces with user input and handles interactive components (buttons, slash commands).
+- **Framework**: AWS Lambda + API Gateway (Python handlers) – Serverless compute; each Discord interaction invokes a Lambda function, eliminating the need for a persistent server.
+- **Data store**: DynamoDB – Primary data store for meal participation records and headcount data. S3 – Secondary storage, temporary storage for iteration 1 but possibility of keeping as storage option for generated summary reports.
+- **Infra/deploy**: AWS (Lambda, API Gateway or Direct URL, DynamoDB, S3, EventBridge) – fully serverless, scales to zero, no persistent servers to manage, reproducible via IaC.
+- **Integrations**: Discord HTTP Interactions (`discord-interactions` / `PyNaCl`) – handles slash commands and interactive components via Discord's interactions endpoint; serverless-compatible (no persistent gateway connection required).
 
 ---
 
 ## Scope of changes
 - **Discord Bot**: Application commands (slash commands) and interactive message components for user updates and admin summaries.
-- **Backend API**: Endpoints to serve summary data to the dashboard and trigger async summary generation tasks.
+- **Backend API**: Lambda functions behind API Gateway or using direct Lambda URL to handle Discord interaction callbacks and serve summary data to the dashboard.
 
 ## Requirements
 ### Functional requirements
@@ -57,12 +57,12 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 - Admin/Logistics dashboard displays meal totals, location splits (Office vs WFH), and special day indicators.
 - TL dashboard displays team participation list and rollups.
 - Dashboard updates immediately as filters (date, meal type, WFH) or employee changes.
-- Admin can trigger an async daily summary generation process which reflects its state ("in progress" -> "ready") in the UI/Bot.
+- Admin can trigger on-demand daily summary generation (via Lambda invocation) which reflects its state ("in progress" → "ready") in the bot reply.
 
 ### Role-based behavior
 - **Employee**: Can only read and update their own meal and location status.
 - **Team Lead (TL)**: Can view team-level summaries and individual statuses within their team.
-- **Admin/Logistics**: Can view all summaries, overall stats, and trigger async report generations.
+- **Admin/Logistics**: Can view all summaries, overall stats, and trigger on-demand report generation.
 
 ### Validation rules + edge cases
 - Updates past the cut-off time or for past dates are not permitted.
@@ -71,7 +71,7 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 
 ### Definition of Done
 - Discord bot responds to slash commands accurately.
-- Async report generation operates 
+- Serverless report generation runs reliably and posts results to the Discord channel/direct message.
 
 ---
 
@@ -117,14 +117,16 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 ### Data Flow
 
 ```
-User -> Discord -> Discord Bot -> Backend -> S3/DynamoDB -> Backend -> Discord Bot -> Discord
+User -> Discord -> API Gateway/Direct URL -> Lambda(Backend) -> DynamoDB/S3 -> Lambda(Backend) -> Discord API-> Discord
 ```
 ```mermaid
 flowchart LR
-    A[Discord User] -->|slash command| B[Discord Bot]
-    B -->|HTTP request| C[FastAPI Backend]
-    C -->|read/write| D[S3 Storage]
-    C -->|response| B
+    A[Discord User] -->|slash command| B[Discord API]
+    B -->|HTTP interaction POST| C[API Gateway/Direct URL]
+    C -->|invoke| D[Lambda Function]
+    D -->|read/write| E[DynamoDB / S3]
+    D -->|immediate response| C
+    C -->|interaction response| B
     B -->|embed reply| A
 ```
 
@@ -132,10 +134,10 @@ flowchart LR
 
 ## Key decisions and trade-offs
 
-- **Data store**: S3 file storage – Temporary data storage. DynamoDB - Planned for future storage integration
-- **Infra/deploy**: AWS – ensures production-grade deployment, simple CI/CD pipeline, and reproducible infrastructure.
-- **Integrations**: Discord API (discord.py) – directly interfaces with user input and handles interactive components (buttons, slash commands).
-- Async report generation operates on a schedule and updates the report in the Discord channel.
+- **Data store**: DynamoDB – Primary data store for meal records and headcount. S3 – Secondary storage for generated report files.
+- **Infra/deploy**: AWS Lambda, API Gateway/Direct URL, DynamoDB, S3, EventBridge – fully serverless architecture; scales to zero, no persistent infrastructure to operate.
+- **Integrations**: Discord HTTP Interactions (`discord-interactions` / `PyNaCl`) – slash commands and message components via Discord's interactions endpoint; compatible with stateless Lambda invocations.
+- Scheduled and on-demand report generation handled by Lambda functions triggered via EventBridge rules; results posted back to Discord via the Discord API.
 
 ---
 
