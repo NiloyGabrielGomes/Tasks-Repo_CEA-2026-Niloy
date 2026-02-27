@@ -119,6 +119,14 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 ```
 User -> Discord -> Discord Bot -> Backend -> S3/DynamoDB -> Backend -> Discord Bot -> Discord
 ```
+```mermaid
+flowchart LR
+    A[Discord User] -->|slash command| B[Discord Bot]
+    B -->|HTTP request| C[FastAPI Backend]
+    C -->|read/write| D[S3 Storage]
+    C -->|response| B
+    B -->|embed reply| A
+```
 
 ---
 
