@@ -72,3 +72,52 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 ### Definition of Done
 - Discord bot responds to slash commands accurately.
 - Async report generation operates 
+
+---
+
+## User flows
+
+### Employee self-update
+1. User types `/meal-update` in Discord and selects the date for which they want to update their meal participation and work location.
+2. Bot replies with the employee's current status summary and interactive buttons/emoji selectors (Office/WFH, Meal Yes/No).
+3. User clicks "Office" and "Meal Yes".
+4. Bot updates record in storage and replies with a confirmation summary of the user's current status.
+
+### Team Lead summary
+1. Team Lead types `/team-summary` in Discord.
+2. Bot replies with the team's current status summary based on his team tag in discord server.
+3. Team Lead can filter by date, meal type, and WFH status.
+
+### Admin summary
+1. Admin types `/headcount-summary` in Discord.
+2. Bot replies with the overall headcount summary based on his admin tag in discord server.
+3. Admin can filter by date, meal type, and WFH status.
+
+### Admin/Team Lead override
+1. Admin/Team Lead types `/override-update` in Discord.
+2. Bot replies with the options for available employees and dates for override.
+3. Admin/Team Lead selects the employee and the date for which they want to override meal status or WFH status for that employee.
+4. Bot updates record in storage and replies with a confirmation summary of the override.
+5. Team Lead can only override employees in their team (filtered by discord tags).
+6. Admin/Team Lead can bulk update the statuses with the same command but with multiple employees and dates.
+
+---
+
+## Design
+
+### Discord Bot Commands
+
+```
+/meal-update - Update your meal participation and work location for a specific date.
+/team-summary - View your team's meal participation summary.
+/headcount-summary - View the overall headcount summary (Admin only).
+/override-update - Override an employee's meal participation or work location (Admin/Team Lead only).
+```
+
+### Data Flow
+
+```
+User -> Discord -> Discord Bot -> Backend -> S3/DynamoDB -> Backend -> Discord Bot -> Discord
+```
+
+---
