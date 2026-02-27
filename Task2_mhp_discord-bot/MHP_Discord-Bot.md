@@ -40,7 +40,7 @@ This document outlines the development of a Discord bot for Meal Headcount Plann
 - **Framework**: FastAPI - Native async support crucial for real-time WebSocket connections
 - **Data store**: S3 file storage – Temporary data storage. DynamoDB - Planned for future storage integration
 - **Infra/deploy**: AWS – ensures production-grade deployment, simple CI/CD pipeline, and reproducible infrastructure.
-- **Integrations**: Discord API (discord.js) – directly interfaces with user input and handles interactive components (buttons, slash commands).
+- **Integrations**: Discord API (discord.py) – directly interfaces with user input and handles interactive components (buttons, slash commands).
 
 ---
 
@@ -121,3 +121,26 @@ User -> Discord -> Discord Bot -> Backend -> S3/DynamoDB -> Backend -> Discord B
 ```
 
 ---
+
+## Key decisions and trade-offs
+
+- **Data store**: S3 file storage – Temporary data storage. DynamoDB - Planned for future storage integration
+- **Infra/deploy**: AWS – ensures production-grade deployment, simple CI/CD pipeline, and reproducible infrastructure.
+- **Integrations**: Discord API (discord.py) – directly interfaces with user input and handles interactive components (buttons, slash commands).
+- Async report generation operates on a schedule and updates the report in the Discord channel.
+
+---
+
+## Security and access control
+
+- **Authentication**: Discord OAuth2 – ensures only authorized users can interact with the bot.
+- **Authorization**: Discord roles – ensures only authorized users can access specific commands.
+- **Data validation**: Input validation – ensures only valid data is stored in the database.
+
+---
+
+## Testing plan
+
+- **Unit tests**: Unit tests for each component of the bot.
+- **Integration tests**: Integration tests for the bot and the database.
+- **End-to-end tests**: End-to-end tests for the bot and the database.
