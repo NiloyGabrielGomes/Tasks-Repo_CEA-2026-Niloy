@@ -266,6 +266,95 @@ verify_key.verify(message, bytes.fromhex(signature), encoder=RawEncoder)
 
 ---
 
+## Authentication & Authorization
+
+### Overview
+
+The bot uses Discord as the identity provider. Every interaction includes user identity and server roles, eliminating the need for separate login flows.
+
+### Authentication Flow
+
+```
+1. User interacts with bot (slash command / button)
+         ↓
+2. Discord sends interaction to Lambda
+         ↓
+3. PyNaCl verifies signature
+         ↓
+4. Extract user from interaction payload:
+   - discord_id
+   - username
+   - global_name
+   - guild_id
+   - roles (list of role IDs)
+         ↓
+5. Map Discord roles to application role
+         ↓
+6. Create AuthenticatedUser object
+```
+
+### User Extraction
+
+```python
+@dataclass
+class AuthenticatedUser:
+    discord_id: str           # User's Discord ID
+    username: str            # Discord username
+    global_name: Optional[str]  # Display name
+    role: UserRole          # Mapped application role
+    team: Optional[str]      # Derived from Discord roles
+    guild_id: str           # Server ID
+    discord_roles: list[str]  # Raw Discord role IDs
+```
+
+### Role Mapping
+
+Discord server roles are mapped to application roles:
+
+| Discord Role | Application Role | Permission Level |
+|--------------|------------------|------------------|
+| MHP-Admin (role ID) | `admin` | 2 (highest) |
+| MHP-TeamLead (role ID) | `team_lead` | 1 |
+| (no special role) | `employee` | 0 (lowest) |
+
+### Authorization Implementation
+
+```python
+# Command role requirements (defined in auth.py)
+COMMAND_ROLE_REQUIREMENTS = {
+    "meal-update": UserRole.EMPLOYEE,
+    "work-location": UserRole.EMPLOYEE,
+    "team-summary": UserRole.TEAM_LEAD,
+    "headcount-summary": UserRole.ADMIN,
+    "override-update": UserRole.ADMIN,
+    "generate-summary": UserRole.ADMIN,
+}
+
+def check_command_authorization(command_name: str, user: AuthenticatedUser):
+    required_role = COMMAND_ROLE_REQUIREMENTS.get(command_name)
+    if user.role.level < required_role.level:
+        return False, "❌ You don't have permission to use this command."
+    return True, None
+```
+
+### Unauthorized Response
+
+When a user tries to execute a command they don't have permission for:
+
+```json
+{
+  "type": 4,
+  "data": {
+    "content": "❌ You don't have permission to use this command. Required role: admin",
+    "flags": 64
+  }
+}
+```
+
+The `flags: 64` makes the message ephemeral (only the user sees it).
+
+---
+
 ## Security
 
 ### Signature Verification
