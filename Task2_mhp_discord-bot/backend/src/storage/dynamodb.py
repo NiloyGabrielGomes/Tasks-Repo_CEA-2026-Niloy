@@ -80,4 +80,90 @@ class DynamoDBStorage:
         user = self.get_user(discord_id)
         return user.team if user else None
 
+    # ── Meal Participation ───────────────────────────────────────────────────
+
+    def get_meal(
+        self,
+        discord_id: str,
+        meal_date: date,
+        meal_type: MealType
+    ) -> Optional[MealParticipation]:
+        try:
+            resp = self.table.get_item(
+                Key={
+                    "PK": f"DATE#{meal_date.isoformat()}#MEAL",
+                    "SK": f"USER#{discord_id}#{meal_type.value}"
+                }
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return MealParticipation(
+                user_id=item["user_id"],
+                meal_type=MealType(item["meal_type"]),
+                date=date.fromisoformat(item["date"]),
+                is_participating=item.get("is_participating", True),
+                updated_by=item.get("updated_by"),
+                updated_at=datetime.fromisoformat(item["updated_at"]),
+                reason=item.get("reason")
+            )
+        except ClientError:
+            return None
+
+    def put_meal(self, meal: MealParticipation) -> None:
+        self.table.put_item(Item={
+            "PK": f"DATE#{meal.date.isoformat()}#MEAL",
+            "SK": f"USER#{meal.user_id}#{meal.meal_type.value}",
+            "user_id": meal.user_id,
+            "date": meal.date.isoformat(),
+            "meal_type": meal.meal_type.value,
+            "is_participating": meal.is_participating,
+            "updated_by": meal.updated_by,
+            "updated_at": meal.updated_at.isoformat(),
+            "reason": meal.reason
+        })
+
+    def get_meals_for_date(self, meal_date: date) -> list[MealParticipation]:
+        meals = []
+        try:
+            resp = self.table.query(
+                KeyConditionExpression=Key("PK").eq(f"DATE#{meal_date.isoformat()}#MEAL")
+            )
+            for item in resp.get("Items", []):
+                meals.append(MealParticipation(
+                    user_id=item["user_id"],
+                    meal_type=MealType(item["meal_type"]),
+                    date=date.fromisoformat(item["date"]),
+                    is_participating=item.get("is_participating", True),
+                    updated_by=item.get("updated_by"),
+                    updated_at=datetime.fromisoformat(item["updated_at"]),
+                    reason=item.get("reason")
+                ))
+        except ClientError as e:
+            print(f"Error querying meals: {e}")
+        return meals
+
+    def get_meals_for_user(self, discord_id: str, start_date: date = None) -> list[MealParticipation]:
+        meals = []
+        try:
+            resp = self.table.scan(
+                FilterExpression="user_id = :uid",
+                ExpressionAttributeValues={":uid": discord_id}
+            )
+            for item in resp.get("Items", []):
+                meal_date = date.fromisoformat(item["date"])
+                if start_date is None or meal_date >= start_date:
+                    meals.append(MealParticipation(
+                        user_id=item["user_id"],
+                        meal_type=MealType(item["meal_type"]),
+                        date=meal_date,
+                        is_participating=item.get("is_participating", True),
+                        updated_by=item.get("updated_by"),
+                        updated_at=datetime.fromisoformat(item["updated_at"]),
+                        reason=item.get("reason")
+                    ))
+        except ClientError as e:
+            print(f"Error scanning meals: {e}")
+        return meals
+
     
