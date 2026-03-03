@@ -11,6 +11,8 @@
 1. [Overview](#overview)
 2. [Architecture](#architecture)
 3. [Infrastructure](#infrastructure)
+4. [DynamoDB Schema](#dynamodb-schema)
+5. [Discord Integration](#discord-integration)
 
 ---
 
@@ -99,6 +101,127 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 | `WFH_MONTHLY_CAP` | WFH days per month | `5` |
 | `FORWARD_PLANNING_DAYS` | Max days ahead to book | `7` |
 | `TIMEZONE` | timezone | `Asia/Dhaka` |
+
+---
+
+## DynamoDB Schema
+
+### Design Principles
+
+- **Single-table design** — All entities in one DynamoDB table
+- **No GSIs** — All access patterns use primary key queries
+- **Partition by date** — Most common queries are date-based
+
+### Key Structure
+
+| PK (Partition Key) | SK (Sort Key) | Entity Type |
+|---|---|---|
+| `USER#{discord_id}` | `PROFILE` | User profile |
+| `DATE#{date}#MEAL` | `USER#{discord_id}#{meal_type}` | Meal participation |
+| `DATE#{date}#LOCATION` | `USER#{discord_id}` | Work location |
+| `SPECIALDAY#{date}` | `-` | Special day config |
+| `POLICY#{name}` | `-` | Policy settings |
+
+### Access Patterns
+
+| Operation | Query | Key Expression |
+|-----------|-------|----------------|
+| Get all meals for date | Query | `PK = DATE#2026-02-26#MEAL` |
+| Get user's meal for date | Query | `PK = DATE#2026-02-26#MEAL`, SK begins with `USER#123` |
+| Get all locations for date | Query | `PK = DATE#2026-02-26#LOCATION` |
+| Get user profile | Get | `PK = USER#123`, `SK = PROFILE` |
+| Get special day | Get | `PK = SPECIALDAY#2026-02-26` |
+| Get policy | Get | `PK = POLICY#cutoff_time` |
+
+### Data Models
+
+#### User
+
+```python
+class User:
+    discord_id: str      # Primary identifier
+    name: str           # Display name
+    email: str          # Email (optional)
+    role: UserRole     # employee, team_lead, admin
+    team: str          # Team name (optional)
+    is_active: bool    # Account status
+    created_at: datetime
+```
+
+#### MealParticipation
+
+```python
+class MealParticipation:
+    user_id: str           # Discord user ID
+    date: date            # Meal date
+    meal_type: MealType   # lunch, snacks, iftar, etc.
+    is_participating: bool # True = opted in, False = opted out
+    updated_by: str       # Who made the update
+    updated_at: datetime
+    reason: str           # Optional reason for change
+```
+
+#### WorkLocation
+
+```python
+class WorkLocation:
+    user_id: str           # Discord user ID
+    date: date            # Location date
+    location: WorkLocationType  # office, wfh
+    updated_by: str       # Who made the update
+    updated_at: datetime
+```
+
+#### SpecialDay
+
+```python
+class SpecialDay:
+    date: date            # The date
+    day_type: DayType    # office_closed, government_holiday, celebration
+    note: str            # Optional note
+```
+
+#### Policy
+
+```python
+class Policy:
+    name: str            # Policy name (e.g., "cutoff_time")
+    value: str           # Policy value
+    updated_at: datetime
+```
+
+---
+
+## Discord Integration
+
+### How It Works
+
+1. **Slash Command** — User types `/meal-update` in Discord
+2. **Discord to Lambda** — Discord sends HTTP POST to API Gateway endpoint
+3. **Signature Verification** — PyNaCl verifies Ed25519 signature
+4. **Process & Respond** — Lambda processes request and returns response
+
+### Signature Verification
+
+The Lambda handler verifies every request using PyNaCl:
+
+```python
+from nacl.signing import VerifyKey
+from nacl.encoding import RawEncoder
+
+verify_key = VerifyKey(bytes.fromhex(public_key))
+message = timestamp.encode() + event_body.encode()
+verify_key.verify(message, bytes.fromhex(signature), encoder=RawEncoder)
+```
+
+### Response Types
+
+| Type | Code | Use Case |
+|------|------|----------|
+| PONG | 1 | Ping/pong verification |
+| CHANNEL_MESSAGE | 4 | Regular response |
+| DEFERRED_CHANNEL_MESSAGE | 5 | Long processing |
+| UPDATE_MESSAGE | 7 | Update original message |
 
 ---
 
