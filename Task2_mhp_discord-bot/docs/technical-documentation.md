@@ -1,8 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.0.0  
+> **Version:** 1.1.0  
 > **Last Updated:** 2026-03-03  
-> **Status:** Issue #1 Complete — Serverless Infrastructure Setup
+> **Status:** Issue #2 Complete — Discord OAuth2 Authentication & Role-based Authorization
+> **Addressed Issues:** #1
 
 ---
 
@@ -13,8 +14,9 @@
 3. [Infrastructure](#infrastructure)
 4. [DynamoDB Schema](#dynamodb-schema)
 5. [Discord Integration](#discord-integration)
-6. [Security](#security)
-7. [Future Enhancements](#future-enhancements)
+6. [Authentication & Authorization](#authentication--authorization)
+7. [Security](#security)
+8. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -52,6 +54,9 @@ User → Discord → API Gateway → Lambda → DynamoDB/S3
                 ↓
          PyNaCl Signature
          Verification
+         ↓
+    Role-based Access
+    Control (RBAC)
 ```
 
 ---
@@ -91,18 +96,45 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 ### Environment Variables
 
+#### Required Secrets (store in AWS Secrets Manager)
+
+| Variable | Description |
+|----------|-------------|
+| `DISCORD_PUBLIC_KEY` | Discord app public key (hex format) |
+| `DISCORD_BOT_TOKEN` | Discord bot token |
+| `DISCORD_CLIENT_SECRET` | Discord OAuth2 client secret |
+| `SECRET_KEY` | Internal JWT signing key |
+
+#### Required Config
+
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DISCORD_PUBLIC_KEY` | Discord app public key | (required) |
 | `DISCORD_APPLICATION_ID` | Discord application ID | (required) |
-| `DISCORD_BOT_TOKEN` | Discord bot token | (required) |
+| `DISCORD_CLIENT_ID` | Discord OAuth2 client ID | (required) |
 | `DISCORD_GUILD_ID` | Discord server ID | (required) |
+| `DISCORD_REDIRECT_URI` | OAuth2 callback URI | (required) |
+| `ROLE_ADMIN_ID` | Discord role ID for admins | (optional) |
+| `ROLE_TEAM_LEAD_ID` | Discord role ID for team leads | (optional) |
+
+#### Application Config
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `DYNAMODB_TABLE_NAME` | DynamoDB table name | `mhp-dev-data` |
 | `S3_BUCKET` | S3 bucket name | `mhp-dev-reports` |
 | `CUTOFF_TIME` | Meal update cutoff (Dhaka) | `21:00` |
 | `WFH_MONTHLY_CAP` | WFH days per month | `5` |
 | `FORWARD_PLANNING_DAYS` | Max days ahead to book | `7` |
 | `TIMEZONE` | timezone | `Asia/Dhaka` |
+| `DEBUG` | Enable debug mode | `false` |
+
+#### Role Mapping Config
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ROLE_ADMIN` | Discord role name for admins | `MHP-Admin` |
+| `ROLE_TEAM_LEAD` | Discord role name for team leads | `MHP-TeamLead` |
+| `ROLE_EMPLOYEE` | Default role for employees | `MHP-Employee` |
 
 ---
 
@@ -146,7 +178,7 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 class User:
     discord_id: str      # Primary identifier
     name: str           # Display name
-    email: str          # Email (optional)
+    email: str         # Email (optional)
     role: UserRole     # employee, team_lead, admin
     team: str          # Team name (optional)
     is_active: bool    # Account status
@@ -164,7 +196,7 @@ class MealParticipation:
     team: str             # Team name stamped from Discord role at write time
     updated_by: str       # Who made the update
     updated_at: datetime
-    reason: str           # Optional reason for change
+    reason: str          # Optional reason for change
 ```
 
 #### WorkLocation
@@ -206,7 +238,9 @@ class Policy:
 1. **Slash Command** — User types `/meal-update` in Discord
 2. **Discord to Lambda** — Discord sends HTTP POST to API Gateway endpoint
 3. **Signature Verification** — PyNaCl verifies Ed25519 signature
-4. **Process & Respond** — Lambda processes request and returns response
+4. **Authentication** — Extract user identity and roles from interaction payload
+5. **Authorization** — Check if user has permission for the command
+6. **Process & Respond** — Lambda processes request and returns response
 
 ### Signature Verification
 
