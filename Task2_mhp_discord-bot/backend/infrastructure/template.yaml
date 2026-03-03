@@ -1,0 +1,113 @@
+# AWS SAM Template for MHP Discord Bot
+# Serverless Application Model - Infrastructure as Code
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Meal Headcount Planner Discord Bot - Serverless Infrastructure
+
+# Parameters
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment
+
+  DiscordPublicKey:
+  DiscordApplicationId:
+  DiscordBotToken:
+  DiscordGuildId:
+# Globals
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+
+# Resources
+Resources:
+  # DynamoDB Table - Single Table Design
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub mhp-${Environment}-data
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: MHP-Discord-Bot
+
+  # S3 Bucket for Reports
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub mhp-${Environment}-reports
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: MHP-Discord-Bot
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      ManagedPolicyArns:
+      Policies:
+        - PolicyName: 
+
+  # Discord Interaction Lambda Function
+  InteractionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+
+  # Discord API Gateway
+  DiscordApi:
+    Type: AWS::Serverless::Api
+    Properties:
+
+  # Permission for API Gateway to invoke Lambda
+  ApiGatewayLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+
+# Outputs
+Outputs:
+  DynamoDBTableName:
+    Description:
+
+  S3BucketName:
+    Description: 
+
+  DiscordApiEndpoint:
+    Description:
+
+  InteractionFunctionArn:
+    Description:
