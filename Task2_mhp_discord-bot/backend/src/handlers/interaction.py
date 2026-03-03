@@ -135,3 +135,50 @@ def create_error_response(message: str) -> Dict[str, Any]:
     }
 
 
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    
+    logger.info(f"Received event: {event.get('httpMethod')} {event.get('path')}")
+    
+    try:
+        interaction = parse_interaction(event)
+        
+        if not interaction:
+            return {
+                "statusCode": 401,
+                "body": json.dumps({"error": "Invalid signature"})
+            }
+        
+        # Handle PING (Discord verification)
+        interaction_type = interaction.get("type")
+        
+        if interaction_type == INTERACTION_PING:
+            logger.info("Responding to PING")
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"type": RESPONSE_PONG})
+            }
+        
+        user = get_user_from_interaction(interaction)
+        
+        # Route to appropriate handler based on interaction type
+        if interaction_type == INTERACTION_APPLICATION_COMMAND:
+            response = route_command(interaction, user)
+        elif interaction_type == INTERACTION_MESSAGE_COMPONENT:
+            response = handle_component_interaction(interaction, user)
+        else:
+            response = create_error_response(f"Unknown interaction type: {interaction_type}")
+        
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(response)
+        }
+        
+    except Exception as e:
+        logger.exception(f"Error handling interaction: {e}")
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(create_error_response("An error occurred processing your request"))
+        }
