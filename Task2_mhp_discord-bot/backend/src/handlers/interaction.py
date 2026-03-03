@@ -10,6 +10,13 @@ from nacl.encoding import RawEncoder
 from src.config import settings
 from src.services.discord_helpers import extract_team_from_roles
 
+from src.handlers.auth import (
+    AuthenticatedUser,
+    get_user_from_interaction as auth_get_user,
+    check_command_authorization,
+)
+from src.models import UserRole
+
 logger = logging.getLogger(__name__)
 
 # Discord interaction types
@@ -95,45 +102,49 @@ def get_user_from_interaction(interaction: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_command_name(interaction: Dict[str, Any]) -> str:
-    
+
     data = interaction.get("data", {})
     return data.get("name", "")
 
 
-def route_command(interaction: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
-    
-    command_name = get_command_name(interaction)
-    
-    logger.info(f"Routing command: {command_name} for user: {user.get('id')}")
-    
-    # Placeholder response - feature handlers will be added in subsequent issues
-    return {
-        "type": RESPONSE_CHANNEL_MESSAGE,
-        "data": {
-            "content": f"🔧 Command `{command_name}` is being implemented. Stay tuned!",
-            "flags": 64  # Ephemeral
-        }
-    }
-
-
-def handle_component_interaction(interaction: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
-    
-    return {
-        "type": RESPONSE_CHANNEL_MESSAGE,
-        "data": {
-            "content": "🔧 Component interactions are being implemented. Stay tuned!",
-            "flags": 64
-        }
-    }
-
-
 def create_error_response(message: str) -> Dict[str, Any]:
-    
+
     return {
         "type": RESPONSE_CHANNEL_MESSAGE,
         "data": {
             "content": f"❌ {message}",
             "flags": 64  # Ephemeral - only user sees it
+        }
+    }
+
+
+def route_command(interaction: Dict[str, Any], user: AuthenticatedUser) -> Dict[str, Any]:
+
+    command_name = get_command_name(interaction)
+    
+    logger.info(f"Routing command: {command_name} for user: {user.discord_id}")
+    
+    # Check authorization
+    is_authorized, error_msg = check_command_authorization(command_name, user)
+    if not is_authorized:
+        return create_error_response(error_msg)
+    
+    # Placeholder response - feature handlers will be added in subsequent issues
+    return {
+        "type": RESPONSE_CHANNEL_MESSAGE,
+        "data": {
+            "content": f"🔧 Command `{command_name}` is being implemented. Stay tuned!\n\nYour role: {user.role.value}",
+            "flags": 64  # Ephemeral
+        }
+    }
+
+
+def handle_component_interaction(interaction: Dict[str, Any], user: AuthenticatedUser) -> Dict[str, Any]:
+    return {
+        "type": RESPONSE_CHANNEL_MESSAGE,
+        "data": {
+            "content": "🔧 Component interactions are being implemented. Stay tuned!",
+            "flags": 64
         }
     }
 
@@ -162,7 +173,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "body": json.dumps({"type": RESPONSE_PONG})
             }
         
-        user = get_user_from_interaction(interaction)
+        # Use auth module to get authenticated user with role
+        user = auth_get_user(interaction)
+        
+        logger.info(f"User authenticated: {user.username} ({user.discord_id}), role: {user.role.value}")
         
         # Route to appropriate handler based on interaction type
         if interaction_type == INTERACTION_APPLICATION_COMMAND:
