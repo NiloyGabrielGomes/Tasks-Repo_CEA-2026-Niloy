@@ -13,6 +13,8 @@
 3. [Infrastructure](#infrastructure)
 4. [DynamoDB Schema](#dynamodb-schema)
 5. [Discord Integration](#discord-integration)
+6. [Security](#security)
+7. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -225,3 +227,36 @@ verify_key.verify(message, bytes.fromhex(signature), encoder=RawEncoder)
 
 ---
 
+## Security
+
+### Signature Verification
+
+- All Discord requests verified with Ed25519 (PyNaCl)
+- Invalid signatures return 401 Unauthorized
+
+### AWS IAM
+
+- Lambda execution role with minimal permissions
+- DynamoDB: GetItem, PutItem, Query, Scan
+- S3: PutObject, GetObject, ListBucket
+
+### Discord Bot Permissions
+
+Required scopes:
+- `applications.commands` — Slash commands
+- `bot` — Bot user
+
+---
+
+## Future Enhancements
+
+### Planned Features
+
+- **EventBridge Integration** — Scheduled daily summary generation
+- **Team-based Queries** — Filter by team using Discord roles
+- **Web Dashboard** — Separate web interface for admins (Task 3)
+- **Discord Announcements** — Auto-post summaries to channels
+
+---
+
+*This documentation will be updated as new issues are implemented.*
