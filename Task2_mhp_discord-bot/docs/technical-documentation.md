@@ -273,6 +273,12 @@ verify_key.verify(message, bytes.fromhex(signature), encoder=RawEncoder)
 - All Discord requests verified with Ed25519 (PyNaCl)
 - Invalid signatures return 401 Unauthorized
 
+### Role-based Access Control
+
+- Users can only execute commands permitted by their role
+- Role mapping happens on every interaction (no cached roles)
+- Unauthorized attempts are logged and return clear error messages
+
 ### AWS IAM
 
 - Lambda execution role with minimal permissions
@@ -285,6 +291,20 @@ Required scopes:
 - `applications.commands` — Slash commands
 - `bot` — Bot user
 
+### Secrets Management
+
+For production deployments, store sensitive values in AWS Secrets Manager:
+
+```
+Secrets Manager → Lambda Environment Variables → Application
+```
+
+Recommended secrets:
+- `DISCORD_PUBLIC_KEY`
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_CLIENT_SECRET`
+- `SECRET_KEY`
+
 ---
 
 ## Future Enhancements
@@ -295,6 +315,7 @@ Required scopes:
 - **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
 - **Web Dashboard** — Separate web interface for admins (Task 3)
 - **Discord Announcements** — Auto-post summaries to channels
+- **OAuth2 Flow** — For web dashboard authentication and discord and lambda request processing
 
 ---
 
