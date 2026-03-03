@@ -222,4 +222,58 @@ class DynamoDBStorage:
             print(f"Error querying locations: {e}")
         return locations
 
-    
+    # ── Special Day ─────────────────────────────────────────────────────────
+
+    def get_special_day(self, special_date: date) -> Optional[SpecialDay]:
+        try:
+            resp = self.table.get_item(
+                Key={"PK": f"SPECIALDAY#{special_date.isoformat()}", "SK": "-"}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return SpecialDay(
+                date=date.fromisoformat(item["date"]),
+                day_type=DayType(item["day_type"]),
+                note=item.get("note")
+            )
+        except ClientError:
+            return None
+
+    def put_special_day(self, special_day: SpecialDay) -> None:
+        self.table.put_item(Item={
+            "PK": f"SPECIALDAY#{special_day.date.isoformat()}",
+            "SK": "-",
+            "date": special_day.date.isoformat(),
+            "day_type": special_day.day_type.value,
+            "note": special_day.note
+        })
+
+    # ── Policy ───────────────────────────────────────────────────────────────
+
+    def get_policy(self, policy_name: str) -> Optional[Policy]:
+        try:
+            resp = self.table.get_item(
+                Key={"PK": f"POLICY#{policy_name}", "SK": "-"}
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return Policy(
+                name=item["name"],
+                value=item["value"],
+                updated_at=datetime.fromisoformat(item["updated_at"])
+            )
+        except ClientError:
+            return None
+
+    def put_policy(self, policy: Policy) -> None:
+        self.table.put_item(Item={
+            "PK": f"POLICY#{policy.name}",
+            "SK": "-",
+            "name": policy.name,
+            "value": policy.value,
+            "updated_at": policy.updated_at.isoformat()
+        })
+# Singleton instance
+storage = DynamoDBStorage()
