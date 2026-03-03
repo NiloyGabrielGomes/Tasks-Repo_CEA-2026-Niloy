@@ -166,4 +166,60 @@ class DynamoDBStorage:
             print(f"Error scanning meals: {e}")
         return meals
 
+    # ── Work Location ───────────────────────────────────────────────────────
+
+    def get_location(
+        self,
+        discord_id: str,
+        location_date: date
+    ) -> Optional[WorkLocation]:
+        try:
+            resp = self.table.get_item(
+                Key={
+                    "PK": f"DATE#{location_date.isoformat()}#LOCATION",
+                    "SK": f"USER#{discord_id}"
+                }
+            )
+            item = resp.get("Item")
+            if not item:
+                return None
+            return WorkLocation(
+                user_id=item["user_id"],
+                date=date.fromisoformat(item["date"]),
+                location=WorkLocationType(item["location"]),
+                updated_by=item.get("updated_by"),
+                updated_at=datetime.fromisoformat(item["updated_at"])
+            )
+        except ClientError:
+            return None
+
+    def put_location(self, location: WorkLocation) -> None:
+        self.table.put_item(Item={
+            "PK": f"DATE#{location.date.isoformat()}#LOCATION",
+            "SK": f"USER#{location.user_id}",
+            "user_id": location.user_id,
+            "date": location.date.isoformat(),
+            "location": location.location.value,
+            "updated_by": location.updated_by,
+            "updated_at": location.updated_at.isoformat()
+        })
+
+    def get_locations_for_date(self, location_date: date) -> list[WorkLocation]:
+        locations = []
+        try:
+            resp = self.table.query(
+                KeyConditionExpression=Key("PK").eq(f"DATE#{location_date.isoformat()}#LOCATION")
+            )
+            for item in resp.get("Items", []):
+                locations.append(WorkLocation(
+                    user_id=item["user_id"],
+                    date=date.fromisoformat(item["date"]),
+                    location=WorkLocationType(item["location"]),
+                    updated_by=item.get("updated_by"),
+                    updated_at=datetime.fromisoformat(item["updated_at"])
+                ))
+        except ClientError as e:
+            print(f"Error querying locations: {e}")
+        return locations
+
     
