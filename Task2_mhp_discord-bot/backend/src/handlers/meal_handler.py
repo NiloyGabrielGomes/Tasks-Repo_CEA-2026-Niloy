@@ -154,4 +154,85 @@ def handle_meal_update(
         }
 
 
+def handle_meal_toggle(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    try:
+        data = interaction.get("data", {})
+        custom_id = data.get("custom_id", "")
 
+        # Parse custom_id: meal_toggle:<discord_id>:<date>:<meal_type>
+        parts = custom_id.split(":")
+        if len(parts) != 4 or parts[0] != MEAL_TOGGLE_PREFIX:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {
+                    "content": "❌ Invalid button interaction.",
+                    "flags": 64,
+                },
+            }
+
+        _, target_user_id, date_str, meal_type_str = parts
+
+        # Security: ensure the clicking user matches the button target
+        if user.discord_id != target_user_id:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {
+                    "content": "❌ You can only update your own meal participation.",
+                    "flags": 64,
+                },
+            }
+
+        target_date = date.fromisoformat(date_str)
+        meal_type = MealType(meal_type_str)
+
+        # Toggle
+        success, result = meal_service.toggle_meal_participation(
+            discord_id=user.discord_id,
+            target_date=target_date,
+            meal_type=meal_type,
+            updated_by=user.discord_id,
+        )
+
+        if not success:
+            # result is an error message string
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {
+                    "content": f"❌ {result}",
+                    "flags": 64,
+                },
+            }
+
+        # Build updated embed + buttons showing new state
+        embed = _build_meal_status_embed(user.discord_id, target_date)
+        components = _build_meal_toggle_buttons(user.discord_id, target_date)
+
+        # Add confirmation text to embed description
+        display = meal_service.get_meal_display_info(meal_type)
+        status_text = "✅ Opted In" if result.is_participating else "❌ Opted Out"
+        embed["description"] = (
+            f"📅 **{format_date_display(target_date)}**\n\n"
+            f"Updated **{display['emoji']} {display['label']}** → {status_text}\n\n"
+            f"Click a button below to toggle your participation for each meal."
+        )
+
+        # Use UPDATE_MESSAGE to edit the original response in place
+        return {
+            "type": RESPONSE_UPDATE_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+            },
+        }
+
+    except Exception as e:
+        logger.exception(f"Error handling meal toggle: {e}")
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "content": "❌ An error occurred while updating your meal status. Please try again.",
+                "flags": 64,
+            },
+        }
