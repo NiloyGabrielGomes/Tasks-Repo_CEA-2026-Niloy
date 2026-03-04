@@ -4,6 +4,7 @@ from typing import Optional
 
 from src.config import settings
 from src.models import UserRole
+from src.services.discord_helpers import extract_team_from_roles
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +63,14 @@ def get_user_from_interaction(interaction: dict) -> AuthenticatedUser:
     guild_id = member.get("guild_id") or interaction.get("guild_id", "")
     
     # Map Discord roles to application role
-    app_role, team = map_discord_roles_to_app_role(discord_roles)
+    app_role, _ = map_discord_roles_to_app_role(discord_roles)
+    
+    # Derive team from Discord roles via DynamoDB policy (team_role_map)
+    team = extract_team_from_roles(discord_roles)
     
     logger.info(
         f"Authenticated user: {username} ({discord_id}) - Role: {app_role.value}, "
-        f"Discord roles: {discord_roles}"
+        f"Team: {team}, Discord roles: {discord_roles}"
     )
     
     return AuthenticatedUser(
