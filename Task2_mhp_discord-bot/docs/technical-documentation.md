@@ -401,6 +401,9 @@ Recommended secrets:
 
 ### Planned Features
 
+- **Work Location** (Issue #4) — `/work-location` command for Office/WFH toggle
+- **Override Support** (Issue #5) — TL/Admin override for missing entries
+- **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands
 - **EventBridge Integration** — Scheduled daily summary generation
 - **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
 - **Web Dashboard** — Separate web interface for admins (Task 3)
