@@ -193,6 +193,7 @@ def handle_meal_toggle(
             target_date=target_date,
             meal_type=meal_type,
             updated_by=user.discord_id,
+            team=user.team,
         )
 
         if not success:

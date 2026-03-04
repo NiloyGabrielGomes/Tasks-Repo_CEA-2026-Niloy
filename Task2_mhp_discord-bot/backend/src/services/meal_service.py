@@ -51,6 +51,7 @@ class MealService:
         target_date: date,
         meal_type: MealType,
         updated_by: str | None = None,
+        team: str | None = None,
     ) -> tuple[bool, MealParticipation | str]:
         # Validate date
         is_valid, error_msg = validate_date_for_update(target_date)
@@ -74,6 +75,7 @@ class MealService:
             meal_type=meal_type,
             date=target_date,
             is_participating=new_status,
+            team=team,
             updated_by=updated_by or discord_id,
             updated_at=now,
         )
