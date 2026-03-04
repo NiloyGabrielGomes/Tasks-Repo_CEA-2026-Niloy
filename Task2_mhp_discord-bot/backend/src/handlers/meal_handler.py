@@ -103,3 +103,55 @@ def _build_meal_toggle_buttons(
     return rows
 
 
+def handle_meal_update(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    try:
+        options = _get_command_options(interaction)
+        date_str = options.get("date")
+
+        try:
+            target_date = parse_date_option(date_str)
+        except ValueError as e:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {
+                    "content": f"❌ {str(e)}",
+                    "flags": 64,
+                },
+            }
+
+        is_valid, error_msg = validate_date_for_update(target_date)
+        if not is_valid:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {
+                    "content": f"❌ {error_msg}",
+                    "flags": 64,
+                },
+            }
+
+        embed = _build_meal_status_embed(user.discord_id, target_date)
+        components = _build_meal_toggle_buttons(user.discord_id, target_date)
+
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+                "flags": 64,  # Ephemeral
+            },
+        }
+
+    except Exception as e:
+        logger.exception(f"Error handling meal-update: {e}")
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "content": "❌ An error occurred while fetching your meal status. Please try again.",
+                "flags": 64,
+            },
+        }
+
+
+
