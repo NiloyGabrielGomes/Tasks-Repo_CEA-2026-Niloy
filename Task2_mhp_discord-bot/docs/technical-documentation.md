@@ -356,6 +356,73 @@ The `flags: 64` makes the message ephemeral (only the user sees it).
 
 ---
 
+## Meal Participation
+
+### Overview
+
+Employees can view and toggle their meal participation for any eligible date via the `/meal-update` slash command. The bot responds with an interactive embed containing toggle buttons for each meal type. Default participation is **opted-in** — employees explicitly opt out.
+
+### Command: `/meal-update`
+
+```
+/meal-update [date:YYYY-MM-DD]
+```
+
+- **date** (optional) — Target date. Defaults to today (Asia/Dhaka).
+- **Access** — All authenticated users (Employee+).
+
+### Flow
+
+```
+1. User types /meal-update [date]
+         ↓
+2. Lambda validates date:
+   - Not in the past
+   - Not past cutoff (21:00 Dhaka)
+   - Within forward window (7 days)
+         ↓
+3. Query DynamoDB for user's meal records on that date
+         ↓
+4. Build embed showing status per meal type + toggle buttons
+         ↓
+5. Return ephemeral response with embed + buttons
+         ↓
+6. User clicks a button → component interaction
+         ↓
+7. Lambda toggles the meal record in DynamoDB
+         ↓
+8. Return UPDATE_MESSAGE with refreshed embed + buttons
+```
+
+### Validation Rules
+
+| Rule | Behavior |
+|------|----------|
+| Past date | Rejected — "Cannot update past dates" |
+| After cutoff (21:00 Dhaka) | Rejected — "Updates for {date} are closed" |
+| Beyond forward window | Rejected — "Cannot update dates more than 7 days ahead" |
+| Invalid date format | Rejected — "Invalid date format. Use YYYY-MM-DD" |
+
+### Meal Types
+
+Default daily meal types:
+
+| Meal Type | Emoji | Default Status |
+|-----------|-------|----------------|
+| Lunch | 🍱 | Opted In |
+| Snacks | 🍕 | Opted In |
+
+Additional types (activated per-date in future issues):
+
+| Meal Type | Emoji | Trigger |
+|-----------|-------|--------|
+| Iftar | 🌙 | Ramadan period |
+| Event Dinner | 🎉 | Event meal (Issue #13) |
+| Optional Dinner | 🍽️ | Special occasions |
+
+
+---
+
 ## Security
 
 ### Signature Verification
