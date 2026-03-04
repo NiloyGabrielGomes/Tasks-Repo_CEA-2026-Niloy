@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.1.0  
-> **Last Updated:** 2026-03-03  
-> **Status:** Issue #2 Complete — Discord OAuth2 Authentication & Role-based Authorization
-> **Addressed Issues:** #1
+> **Version:** 1.2.0  
+> **Last Updated:** 2026-03-04  
+> **Status:** Issue #3 Complete — Meal Participation for Employees
+> **Addressed Issues:** #1, #2, #3
 
 ---
 
@@ -15,8 +15,9 @@
 4. [DynamoDB Schema](#dynamodb-schema)
 5. [Discord Integration](#discord-integration)
 6. [Authentication & Authorization](#authentication--authorization)
-7. [Security](#security)
-8. [Future Enhancements](#future-enhancements)
+7. [Meal Participation](#meal-participation)
+8. [Security](#security)
+9. [Future Enhancements](#future-enhancements)
 
 ---
 
