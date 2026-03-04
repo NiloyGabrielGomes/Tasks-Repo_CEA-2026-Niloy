@@ -113,6 +113,7 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 - **Single-table design** — All entities in one DynamoDB table
 - **No GSIs** — All access patterns use primary key queries
 - **Partition by date** — Most common queries are date-based
+- **Team stamped at write time** — Team name (from the user's Discord team role) is written on every meal/location record. Team queries use `Query` on date PK + `FilterExpression` on `team`. Discord roles remain the source of truth; the stamp is refreshed on every update.
 
 ### Key Structure
 
@@ -130,7 +131,9 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 |-----------|-------|----------------|
 | Get all meals for date | Query | `PK = DATE#2026-02-26#MEAL` |
 | Get user's meal for date | Query | `PK = DATE#2026-02-26#MEAL`, SK begins with `USER#123` |
+| Get team meals for date | Query + Filter | `PK = DATE#2026-02-26#MEAL`, Filter `team = "Team-Backend"` |
 | Get all locations for date | Query | `PK = DATE#2026-02-26#LOCATION` |
+| Get team locations for date | Query + Filter | `PK = DATE#2026-02-26#LOCATION`, Filter `team = "Team-Backend"` |
 | Get user profile | Get | `PK = USER#123`, `SK = PROFILE` |
 | Get special day | Get | `PK = SPECIALDAY#2026-02-26` |
 | Get policy | Get | `PK = POLICY#cutoff_time` |
@@ -158,6 +161,7 @@ class MealParticipation:
     date: date            # Meal date
     meal_type: MealType   # lunch, snacks, iftar, etc.
     is_participating: bool # True = opted in, False = opted out
+    team: str             # Team name stamped from Discord role at write time
     updated_by: str       # Who made the update
     updated_at: datetime
     reason: str           # Optional reason for change
@@ -170,6 +174,7 @@ class WorkLocation:
     user_id: str           # Discord user ID
     date: date            # Location date
     location: WorkLocationType  # office, wfh
+    team: str             # Team name stamped from Discord role at write time
     updated_by: str       # Who made the update
     updated_at: datetime
 ```
@@ -253,7 +258,7 @@ Required scopes:
 ### Planned Features
 
 - **EventBridge Integration** — Scheduled daily summary generation
-- **Team-based Queries** — Filter by team using Discord roles
+- **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
 - **Web Dashboard** — Separate web interface for admins (Task 3)
 - **Discord Announcements** — Auto-post summaries to channels
 
