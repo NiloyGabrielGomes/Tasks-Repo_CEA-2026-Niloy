@@ -17,8 +17,41 @@ def get_dhaka_today() -> date:
     return get_dhaka_now().date()
 
 
+_DEFAULT_CUTOFF_HOUR = 21
+_DEFAULT_CUTOFF_MINUTE = 0
+
+
+def _parse_cutoff_time(raw: str) -> tuple[int, int]:
+    parts = raw.split(":")
+    if len(parts) != 2:
+        logger.warning(
+            "Malformed CUTOFF_TIME '%s' (expected HH:MM). Falling back to %02d:%02d.",
+            raw, _DEFAULT_CUTOFF_HOUR, _DEFAULT_CUTOFF_MINUTE,
+        )
+        return _DEFAULT_CUTOFF_HOUR, _DEFAULT_CUTOFF_MINUTE
+
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except ValueError:
+        logger.warning(
+            "Non-numeric CUTOFF_TIME '%s'. Falling back to %02d:%02d.",
+            raw, _DEFAULT_CUTOFF_HOUR, _DEFAULT_CUTOFF_MINUTE,
+        )
+        return _DEFAULT_CUTOFF_HOUR, _DEFAULT_CUTOFF_MINUTE
+
+    if not (0 <= hour < 24 and 0 <= minute < 60):
+        logger.warning(
+            "CUTOFF_TIME '%s' out of range (hour 0-23, minute 0-59). "
+            "Falling back to %02d:%02d.",
+            raw, _DEFAULT_CUTOFF_HOUR, _DEFAULT_CUTOFF_MINUTE,
+        )
+        return _DEFAULT_CUTOFF_HOUR, _DEFAULT_CUTOFF_MINUTE
+
+    return hour, minute
+
+
 def get_cutoff_datetime(target_date: date) -> datetime:
-    hour, minute = map(int, settings.CUTOFF_TIME.split(":"))
+    hour, minute = _parse_cutoff_time(settings.CUTOFF_TIME)
     return datetime(
         target_date.year, target_date.month, target_date.day,
         hour, minute, 0,
