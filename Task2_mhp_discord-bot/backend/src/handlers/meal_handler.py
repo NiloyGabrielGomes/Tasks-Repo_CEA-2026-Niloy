@@ -27,4 +27,79 @@ BUTTON_DANGER = 4     # Red (opted out)
 # Custom ID prefix for meal toggle buttons
 MEAL_TOGGLE_PREFIX = "meal_toggle"
 
+def _get_command_options(interaction: Dict[str, Any]) -> dict[str, Any]:
+    data = interaction.get("data", {})
+    options = data.get("options", [])
+    return {opt["name"]: opt["value"] for opt in options}
+
+
+def _build_meal_status_embed(
+    discord_id: str, target_date: date
+) -> Dict[str, Any]:
+    meals = meal_service.get_user_meals_for_date(discord_id, target_date)
+
+    fields = []
+    for meal_type, record in meals.items():
+        display = meal_service.get_meal_display_info(meal_type)
+        is_participating = meal_service.get_participation_status(record)
+
+        status_emoji = "✅" if is_participating else "❌"
+        status_text = "Opted In" if is_participating else "Opted Out"
+
+        fields.append({
+            "name": f"{display['emoji']} {display['label']}",
+            "value": f"{status_emoji} {status_text}",
+            "inline": True,
+        })
+
+    embed = {
+        "title": "🍽️ Meal Participation",
+        "description": f"📅 **{format_date_display(target_date)}**\n\nClick a button below to toggle your participation for each meal.",
+        "fields": fields,
+        "color": 0x5865F2,  # Discord blurple
+        "footer": {
+            "text": "Default: Opted In for all meals • Toggle to change"
+        },
+    }
+
+    return embed
+
+
+def _build_meal_toggle_buttons(
+    discord_id: str, target_date: date
+) -> list[Dict[str, Any]]:
+    meals = meal_service.get_user_meals_for_date(discord_id, target_date)
+
+    buttons = []
+    for meal_type, record in meals.items():
+        display = meal_service.get_meal_display_info(meal_type)
+        is_participating = meal_service.get_participation_status(record)
+
+        # custom_id format: meal_toggle:<discord_id>:<date>:<meal_type>
+        custom_id = f"{MEAL_TOGGLE_PREFIX}:{discord_id}:{target_date.isoformat()}:{meal_type.value}"
+
+        if is_participating:
+            style = BUTTON_SUCCESS
+            label = f"{display['emoji']} {display['label']} ✅"
+        else:
+            style = BUTTON_DANGER
+            label = f"{display['emoji']} {display['label']} ❌"
+
+        buttons.append({
+            "type": BUTTON,
+            "style": style,
+            "label": label,
+            "custom_id": custom_id,
+        })
+
+    # Discord allows max 5 buttons per action row
+    rows = []
+    for i in range(0, len(buttons), 5):
+        rows.append({
+            "type": ACTION_ROW,
+            "components": buttons[i:i + 5],
+        })
+
+    return rows
+
 
