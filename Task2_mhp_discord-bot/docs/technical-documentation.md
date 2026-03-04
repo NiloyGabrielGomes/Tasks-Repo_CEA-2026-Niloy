@@ -420,6 +420,58 @@ Additional types (activated per-date in future issues):
 | Event Dinner | 🎉 | Event meal (Issue #13) |
 | Optional Dinner | 🍽️ | Special occasions |
 
+### Toggle Behavior
+
+- **No record exists** → Default is opted-in → First toggle creates record with `is_participating: false`
+- **Record exists with `true`** → Toggle to `false` (opt out)
+- **Record exists with `false`** → Toggle to `true` (opt back in)
+- Every toggle stores `updated_by` (Discord ID) and `updated_at` (timestamp)
+
+### Discord Response Format
+
+#### Initial Embed Response
+
+```json
+{
+  "type": 4,
+  "data": {
+    "embeds": [{
+      "title": "🍽️ Meal Participation",
+      "description": "📅 **Wednesday, March 04, 2026**\n\nClick a button below to toggle...",
+      "fields": [
+        { "name": "🍱 Lunch", "value": "✅ Opted In", "inline": true },
+        { "name": "🍕 Snacks", "value": "✅ Opted In", "inline": true }
+      ],
+      "color": 5793266
+    }],
+    "components": [{
+      "type": 1,
+      "components": [
+        { "type": 2, "style": 3, "label": "🍱 Lunch ✅", "custom_id": "meal_toggle:USER_ID:2026-03-04:lunch" },
+        { "type": 2, "style": 3, "label": "🍕 Snacks ✅", "custom_id": "meal_toggle:USER_ID:2026-03-04:snacks" }
+      ]
+    }],
+    "flags": 64
+  }
+}
+```
+
+#### Button Toggle Response
+
+After clicking a button, the original message is updated in place (type 7 — UPDATE_MESSAGE):
+- Embed description includes confirmation: "Updated **🍱 Lunch** → ❌ Opted Out"
+- Button style changes: Green (3) → Red (4) or vice versa
+- Button label updates: ✅ ↔ ❌
+
+### Button Custom ID Format
+
+```
+meal_toggle:{discord_id}:{date}:{meal_type}
+```
+
+Example: `meal_toggle:111222333:2026-03-04:lunch`
+
+Security: The handler verifies the clicking user matches the `discord_id` in the custom ID. Users cannot toggle other users' buttons.
 
 ---
 
