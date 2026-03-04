@@ -8,6 +8,7 @@ from nacl.signing import VerifyKey
 from nacl.encoding import RawEncoder
 
 from src.config import settings
+from src.services.discord_helpers import extract_team_from_roles
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +82,14 @@ def get_user_from_interaction(interaction: Dict[str, Any]) -> Dict[str, Any]:
     
     member = interaction.get("member", {})
     user = interaction.get("user", {})
+    roles = member.get("roles", [])
     
     return {
         "id": member.get("user", {}).get("id") or user.get("id", ""),
         "username": member.get("user", {}).get("username") or user.get("username", ""),
         "global_name": member.get("user", {}).get("global_name") or user.get("global_name"),
-        "roles": member.get("roles", []),
+        "roles": roles,
+        "team": extract_team_from_roles(roles),
         "guild_id": member.get("guild_id") or interaction.get("guild_id", ""),
     }
 

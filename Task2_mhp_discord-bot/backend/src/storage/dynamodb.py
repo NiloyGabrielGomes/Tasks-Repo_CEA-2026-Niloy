@@ -103,6 +103,7 @@ class DynamoDBStorage:
                 meal_type=MealType(item["meal_type"]),
                 date=date.fromisoformat(item["date"]),
                 is_participating=item.get("is_participating", True),
+                team=item.get("team"),
                 updated_by=item.get("updated_by"),
                 updated_at=datetime.fromisoformat(item["updated_at"]),
                 reason=item.get("reason")
@@ -111,7 +112,7 @@ class DynamoDBStorage:
             return None
 
     def put_meal(self, meal: MealParticipation) -> None:
-        self.table.put_item(Item={
+        item = {
             "PK": f"DATE#{meal.date.isoformat()}#MEAL",
             "SK": f"USER#{meal.user_id}#{meal.meal_type.value}",
             "user_id": meal.user_id,
@@ -121,7 +122,10 @@ class DynamoDBStorage:
             "updated_by": meal.updated_by,
             "updated_at": meal.updated_at.isoformat(),
             "reason": meal.reason
-        })
+        }
+        if meal.team:
+            item["team"] = meal.team
+        self.table.put_item(Item=item)
 
     def get_meals_for_date(self, meal_date: date) -> list[MealParticipation]:
         meals = []
@@ -135,12 +139,38 @@ class DynamoDBStorage:
                     meal_type=MealType(item["meal_type"]),
                     date=date.fromisoformat(item["date"]),
                     is_participating=item.get("is_participating", True),
+                    team=item.get("team"),
                     updated_by=item.get("updated_by"),
                     updated_at=datetime.fromisoformat(item["updated_at"]),
                     reason=item.get("reason")
                 ))
         except ClientError as e:
             print(f"Error querying meals: {e}")
+        return meals
+
+    def get_meals_for_date_and_team(
+        self, meal_date: date, team_name: str
+    ) -> list[MealParticipation]:
+        meals = []
+        try:
+            resp = self.table.query(
+                KeyConditionExpression=Key("PK").eq(f"DATE#{meal_date.isoformat()}#MEAL"),
+                FilterExpression="team = :team",
+                ExpressionAttributeValues={":team": team_name}
+            )
+            for item in resp.get("Items", []):
+                meals.append(MealParticipation(
+                    user_id=item["user_id"],
+                    meal_type=MealType(item["meal_type"]),
+                    date=date.fromisoformat(item["date"]),
+                    is_participating=item.get("is_participating", True),
+                    team=item.get("team"),
+                    updated_by=item.get("updated_by"),
+                    updated_at=datetime.fromisoformat(item["updated_at"]),
+                    reason=item.get("reason")
+                ))
+        except ClientError as e:
+            print(f"Error querying team meals: {e}")
         return meals
 
     def get_meals_for_user(self, discord_id: str, start_date: date = None) -> list[MealParticipation]:
@@ -158,6 +188,7 @@ class DynamoDBStorage:
                         meal_type=MealType(item["meal_type"]),
                         date=meal_date,
                         is_participating=item.get("is_participating", True),
+                        team=item.get("team"),
                         updated_by=item.get("updated_by"),
                         updated_at=datetime.fromisoformat(item["updated_at"]),
                         reason=item.get("reason")
@@ -187,6 +218,7 @@ class DynamoDBStorage:
                 user_id=item["user_id"],
                 date=date.fromisoformat(item["date"]),
                 location=WorkLocationType(item["location"]),
+                team=item.get("team"),
                 updated_by=item.get("updated_by"),
                 updated_at=datetime.fromisoformat(item["updated_at"])
             )
@@ -194,7 +226,7 @@ class DynamoDBStorage:
             return None
 
     def put_location(self, location: WorkLocation) -> None:
-        self.table.put_item(Item={
+        item = {
             "PK": f"DATE#{location.date.isoformat()}#LOCATION",
             "SK": f"USER#{location.user_id}",
             "user_id": location.user_id,
@@ -202,7 +234,10 @@ class DynamoDBStorage:
             "location": location.location.value,
             "updated_by": location.updated_by,
             "updated_at": location.updated_at.isoformat()
-        })
+        }
+        if location.team:
+            item["team"] = location.team
+        self.table.put_item(Item=item)
 
     def get_locations_for_date(self, location_date: date) -> list[WorkLocation]:
         locations = []
@@ -215,11 +250,37 @@ class DynamoDBStorage:
                     user_id=item["user_id"],
                     date=date.fromisoformat(item["date"]),
                     location=WorkLocationType(item["location"]),
+                    team=item.get("team"),
                     updated_by=item.get("updated_by"),
                     updated_at=datetime.fromisoformat(item["updated_at"])
                 ))
         except ClientError as e:
             print(f"Error querying locations: {e}")
+        return locations
+
+    def get_locations_for_date_and_team(
+        self, location_date: date, team_name: str
+    ) -> list[WorkLocation]:
+        locations = []
+        try:
+            resp = self.table.query(
+                KeyConditionExpression=Key("PK").eq(
+                    f"DATE#{location_date.isoformat()}#LOCATION"
+                ),
+                FilterExpression="team = :team",
+                ExpressionAttributeValues={":team": team_name}
+            )
+            for item in resp.get("Items", []):
+                locations.append(WorkLocation(
+                    user_id=item["user_id"],
+                    date=date.fromisoformat(item["date"]),
+                    location=WorkLocationType(item["location"]),
+                    team=item.get("team"),
+                    updated_by=item.get("updated_by"),
+                    updated_at=datetime.fromisoformat(item["updated_at"])
+                ))
+        except ClientError as e:
+            print(f"Error querying team locations: {e}")
         return locations
 
     # ── Special Day ─────────────────────────────────────────────────────────

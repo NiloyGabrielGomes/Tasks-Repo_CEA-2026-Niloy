@@ -39,6 +39,7 @@ class MealParticipation(BaseModel):
     meal_type: MealType
     date: date
     is_participating: bool = True
+    team: Optional[str] = None  # stamped from Discord role at write time
     updated_by: Optional[str] = None  # discord_id of actor
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     reason: Optional[str] = None
@@ -48,6 +49,7 @@ class WorkLocation(BaseModel):
     user_id: str  # discord_id
     date: date
     location: WorkLocationType = WorkLocationType.OFFICE
+    team: Optional[str] = None  # stamped from Discord role at write time
     updated_by: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 # ── Special Day ─────────────────────────────────────────────────────────────
