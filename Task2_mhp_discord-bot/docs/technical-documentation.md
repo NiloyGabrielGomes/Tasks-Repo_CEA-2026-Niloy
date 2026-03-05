@@ -476,6 +476,47 @@ Security: The handler verifies the clicking user matches the `discord_id` in the
 
 ---
 
+## Work Location
+
+### Overview
+
+Employees can view and set their work location (Office or Work From Home) for any eligible date via the `/work-location` slash command. The bot responds with an interactive embed containing Office/WFH buttons. Default location is **Office** — employees explicitly switch to WFH. WFH usage is subject to a configurable monthly soft cap (`WFH_MONTHLY_CAP`, default 5).
+
+### Command: `/work-location`
+
+```
+/work-location [date:YYYY-MM-DD]
+```
+
+- **date** (optional) — Target date. Defaults to today (Asia/Dhaka).
+- **Access** — All authenticated users (Employee+).
+
+### Flow
+
+```
+1. User types /work-location [date]
+         ↓
+2. Lambda validates date:
+   - Not in the past
+   - Not past cutoff (21:00 Dhaka)
+   - Within forward window (7 days)
+         ↓
+3. Query DynamoDB for user's location record on that date
+         ↓
+4. Build embed showing current location + Office/WFH buttons
+         ↓
+5. Return ephemeral response with embed + buttons
+         ↓
+6. User clicks a button → component interaction
+         ↓
+7. Lambda validates and sets the location in DynamoDB
+   (if WFH, checks monthly cap first)
+         ↓
+8. Return UPDATE_MESSAGE with refreshed embed + buttons
+```
+
+---
+
 ## Security
 
 ### Signature Verification
