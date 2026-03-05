@@ -104,3 +104,50 @@ def _build_location_buttons(
 
     return [{"type": ACTION_ROW, "components": buttons}]
 
+# ── Command handler ──────────────────────────────────────────────────────────
+
+def handle_work_location(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    try:
+        options = _get_command_options(interaction)
+        date_str = options.get("date")
+
+        # Parse & validate date
+        try:
+            target_date = parse_date_option(date_str)
+        except ValueError as e:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": f"❌ {e}", "flags": 64},
+            }
+
+        is_valid, error_msg = validate_date_for_update(target_date)
+        if not is_valid:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": f"❌ {error_msg}", "flags": 64},
+            }
+
+        embed = _build_location_status_embed(user.discord_id, target_date)
+        components = _build_location_buttons(user.discord_id, target_date)
+
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+                "flags": 64,  # Ephemeral
+            },
+        }
+
+    except Exception as e:
+        logger.exception("Error handling work-location: %s", e)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "content": "❌ An error occurred while fetching your work location. Please try again.",
+                "flags": 64,
+            },
+        }
+
