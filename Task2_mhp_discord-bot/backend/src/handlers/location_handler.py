@@ -179,8 +179,13 @@ def handle_location_set(
                 },
             }
 
-        target_date = date.fromisoformat(date_str)
-
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": "❌ Invalid date format in button.", "flags": 64},
+            }
         try:
             location = WorkLocationType(location_str)
         except ValueError:
