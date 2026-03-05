@@ -69,3 +69,38 @@ def _build_location_status_embed(
 
     return embed
 
+# ── Button builder ───────────────────────────────────────────────────────────
+
+def _build_location_buttons(
+    discord_id: str, target_date: date
+) -> list[Dict[str, Any]]:
+    record = location_service.get_user_location_for_date(discord_id, target_date)
+    current = location_service.get_current_location(record)
+
+    buttons: list[Dict[str, Any]] = []
+
+    for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
+        display = location_service.get_location_display_info(loc_type)
+        custom_id = (
+            f"{LOCATION_SET_PREFIX}:{discord_id}:"
+            f"{target_date.isoformat()}:{loc_type.value}"
+        )
+
+        is_active = loc_type == current
+        if is_active:
+            style = BUTTON_SUCCESS
+            label = f"{display['emoji']} {display['label']} ✅"
+        else:
+            style = BUTTON_SECONDARY
+            label = f"{display['emoji']} {display['label']}"
+
+        buttons.append({
+            "type": BUTTON,
+            "style": style,
+            "label": label,
+            "custom_id": custom_id,
+            "disabled": is_active,  # can't re-select the current location
+        })
+
+    return [{"type": ACTION_ROW, "components": buttons}]
+
