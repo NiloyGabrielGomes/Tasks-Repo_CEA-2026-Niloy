@@ -24,6 +24,13 @@ from src.handlers.location_handler import (
     handle_location_set,
     LOCATION_SET_PREFIX,
 )
+from src.handlers.override_handler import (
+    handle_override_update,
+    handle_override_meal,
+    handle_override_location,
+    OVERRIDE_MEAL_PREFIX,
+    OVERRIDE_LOC_PREFIX,
+)
 from src.models import UserRole
 
 logger = logging.getLogger(__name__)
@@ -128,6 +135,9 @@ def route_command(interaction: Dict[str, Any], user: AuthenticatedUser) -> Dict[
     if command_name == "work-location":
         return handle_work_location(interaction, user)
     
+    if command_name == "override-update":
+        return handle_override_update(interaction, user)
+    
     # Placeholder response for unimplemented commands
     return {
         "type": RESPONSE_CHANNEL_MESSAGE,
@@ -145,6 +155,12 @@ def handle_component_interaction(interaction: Dict[str, Any], user: Authenticate
     
     if custom_id.startswith(LOCATION_SET_PREFIX):
         return handle_location_set(interaction, user)
+    
+    if custom_id.startswith(OVERRIDE_MEAL_PREFIX):
+        return handle_override_meal(interaction, user)
+    
+    if custom_id.startswith(OVERRIDE_LOC_PREFIX):
+        return handle_override_location(interaction, user)
     
     # Placeholder for unhandled component interactions
     return {

@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.3.0  
+> **Version:** 1.4.0  
 > **Last Updated:** 2026-03-04  
-> **Status:** Issue #4 Complete — Work Location for Employees
-> **Addressed Issues:** #1, #2, #3, #4
+> **Status:** Issue #5 Complete — Admin/Team Lead Override Support
+> **Addressed Issues:** #1, #2, #3, #4, #5
 
 ---
 
@@ -17,8 +17,9 @@
 6. [Authentication & Authorization](#authentication--authorization)
 7. [Meal Participation](#meal-participation)
 8. [Work Location](#work-location)
-9. [Security](#security)
-10. [Future Enhancements](#future-enhancements)
+9. [Override Update](#override-update)
+10. [Security](#security)
+11. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -584,6 +585,83 @@ After clicking a button, the original message is updated in place (type 7 — UP
 
 ---
 
+## Override Update
+
+### Purpose
+
+Admins and Team Leads can update meal participation and work location **on behalf of another employee** via the `/override-update` slash command. This is intended for correcting missed entries or handling situations where an employee cannot update their own records.
+
+### Command: `/override-update`
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `employee` | USER | Yes | The target employee (Discord user mention) |
+| `date` | STRING | No | Target date (`YYYY-MM-DD`), defaults to today |
+
+### Authorization & Team-scoping
+
+| Role | Scope |
+|------|-------|
+| **Admin** | Can override any employee across all teams |
+| **Team Lead** | Can only override employees within their own team |
+| **Employee** | Cannot use this command |
+
+- Minimum role requirement: `UserRole.TEAM_LEAD` (hierarchy level 1+)
+- Team-scoping is enforced in `OverrideService.check_team_scope()`
+- The target employee's team is derived from their Discord roles via `extract_team_from_roles()`
+
+### Flow
+
+```
+/override-update employee:@Target date:2026-03-05
+  ↓
+Auth gate: role >= TEAM_LEAD?
+  ↓
+Team scope: TL same team? Admin always?
+  ↓
+Build embed + buttons showing current state
+  ↓
+User clicks meal/location button
+  ↓
+OverrideService.override_meal() / override_location()
+  ↓
+Updated message with new state + confirmation
+```
+
+### Button Custom ID Format
+
+**Meal buttons:**
+```
+override_meal:{actor_id}:{target_id}:{date}:{meal_type}:{in|out}
+```
+
+**Location buttons:**
+```
+override_loc:{actor_id}:{target_id}:{date}:{location_type}
+```
+
+### Security
+
+- Only the **original actor** (who ran `/override-update`) can click the override buttons
+- Button clicks by other users are rejected with an ephemeral error
+- The `actor_id` is encoded in the custom ID and verified on every button interaction
+
+### Embed Display
+
+- **Color**: Red (`0xED4245`) — visually distinct from self-service embeds
+- **Fields**: Current meal status (✅/❌) per type + current location
+- **Confirmation**: After each button click, a confirmation line appears in the embed description
+- **Footer**: "Overrides are recorded for audit purposes"
+
+### UI Components
+
+| Row | Buttons | Behavior |
+|-----|---------|----------|
+| Row 1 | Meal toggle buttons (Lunch, Snacks) | Green (✅ opted-in) / Red (❌ opted-out) — click toggles |
+| Row 2 | Location buttons (Office, WFH) | Green+disabled (active) / Grey (inactive) — click switches |
+
+---
+
 ## Security
 
 ### Signature Verification
@@ -629,7 +707,6 @@ Recommended secrets:
 
 ### Planned Features
 
-- **Override Support** (Issue #5) — TL/Admin override for missing entries
 - **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands
 - **EventBridge Integration** — Scheduled daily summary generation
 - **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
