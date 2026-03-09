@@ -610,6 +610,42 @@ Admins and Team Leads can update meal participation and work location **on behal
 - Team-scoping is enforced in `OverrideService.check_team_scope()`
 - The target employee's team is derived from their Discord roles via `extract_team_from_roles()`
 
+### Flow
+
+```
+/override-update employee:@Target date:2026-03-05
+  ↓
+Auth gate: role >= TEAM_LEAD?
+  ↓
+Team scope: TL same team? Admin always?
+  ↓
+Build embed + buttons showing current state
+  ↓
+User clicks meal/location button
+  ↓
+OverrideService.override_meal() / override_location()
+  ↓
+Updated message with new state + confirmation
+```
+
+### Button Custom ID Format
+
+**Meal buttons:**
+```
+override_meal:{actor_id}:{target_id}:{date}:{meal_type}:{in|out}
+```
+
+**Location buttons:**
+```
+override_loc:{actor_id}:{target_id}:{date}:{location_type}
+```
+
+### Security
+
+- Only the **original actor** (who ran `/override-update`) can click the override buttons
+- Button clicks by other users are rejected with an ephemeral error
+- The `actor_id` is encoded in the custom ID and verified on every button interaction
+
 ---
 
 ## Security
