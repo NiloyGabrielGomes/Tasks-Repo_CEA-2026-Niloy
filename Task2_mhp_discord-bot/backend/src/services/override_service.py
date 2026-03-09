@@ -140,3 +140,25 @@ class OverrideService:
         )
 
         return True, record
+    
+    # ── Get current states for display ───────────────────────────────────────
+
+    def get_target_current_state(
+        self, target_user_id: str, target_date: date
+    ) -> dict:
+        meals = self.meal_svc.get_user_meals_for_date(target_user_id, target_date)
+        location_record = self.location_svc.get_user_location_for_date(
+            target_user_id, target_date
+        )
+        current_location = self.location_svc.get_current_location(location_record)
+
+        meal_states = {}
+        for meal_type, record in meals.items():
+            is_in = self.meal_svc.get_participation_status(record)
+            meal_states[meal_type] = is_in
+
+        return {
+            "meals": meal_states,
+            "location": current_location,
+        }
+override_service = OverrideService()
