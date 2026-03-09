@@ -109,3 +109,70 @@ def _build_override_embed(
 
     return embed
 
+# ── Button builder ───────────────────────────────────────────────────────────
+
+def _build_override_buttons(
+    actor_id: str,
+    target_user_id: str,
+    target_date: date,
+    current_state: dict,
+) -> list[Dict[str, Any]]:
+    # Meal buttons (row 1)
+    meal_buttons: list[Dict[str, Any]] = []
+    for meal_type in DEFAULT_MEAL_TYPES:
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        is_in = current_state["meals"].get(meal_type, True)
+
+        # Button will toggle to the opposite state
+        new_state = "out" if is_in else "in"
+        custom_id = (
+            f"{OVERRIDE_MEAL_PREFIX}:{actor_id}:{target_user_id}"
+            f":{target_date.isoformat()}:{meal_type.value}:{new_state}"
+        )
+
+        if is_in:
+            style = BUTTON_SUCCESS
+            label = f"{display['emoji']} {display['label']} ✅"
+        else:
+            style = BUTTON_DANGER
+            label = f"{display['emoji']} {display['label']} ❌"
+
+        meal_buttons.append({
+            "type": BUTTON,
+            "style": style,
+            "label": label,
+            "custom_id": custom_id,
+        })
+
+    # Location buttons (row 2)
+    loc_buttons: list[Dict[str, Any]] = []
+    current_loc = current_state["location"]
+    for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
+        loc_display = LOCATION_DISPLAY.get(loc_type, {"label": loc_type.value, "emoji": "📍"})
+        is_active = loc_type == current_loc
+        custom_id = (
+            f"{OVERRIDE_LOC_PREFIX}:{actor_id}:{target_user_id}"
+            f":{target_date.isoformat()}:{loc_type.value}"
+        )
+
+        if is_active:
+            style = BUTTON_SUCCESS
+            label = f"{loc_display['emoji']} {loc_display['label']} ✅"
+        else:
+            style = BUTTON_SECONDARY
+            label = f"{loc_display['emoji']} {loc_display['label']}"
+
+        loc_buttons.append({
+            "type": BUTTON,
+            "style": style,
+            "label": label,
+            "custom_id": custom_id,
+            "disabled": is_active,
+        })
+
+    rows = [
+        {"type": ACTION_ROW, "components": meal_buttons},
+        {"type": ACTION_ROW, "components": loc_buttons},
+    ]
+    return rows
+
