@@ -103,7 +103,7 @@ COMMAND_ROLE_REQUIREMENTS = {
     "work-location": UserRole.EMPLOYEE,
     "team-summary": UserRole.TEAM_LEAD,
     "headcount-summary": UserRole.ADMIN,
-    "override-update": UserRole.ADMIN,
+    "override-update": UserRole.TEAM_LEAD,
     "generate-summary": UserRole.ADMIN,
 }
 
