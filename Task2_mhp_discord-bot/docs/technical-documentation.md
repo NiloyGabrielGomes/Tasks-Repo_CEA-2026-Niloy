@@ -585,6 +585,33 @@ After clicking a button, the original message is updated in place (type 7 — UP
 
 ---
 
+## Override Update
+
+### Purpose
+
+Admins and Team Leads can update meal participation and work location **on behalf of another employee** via the `/override-update` slash command. This is intended for correcting missed entries or handling situations where an employee cannot update their own records.
+
+### Command: `/override-update`
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `employee` | USER | Yes | The target employee (Discord user mention) |
+| `date` | STRING | No | Target date (`YYYY-MM-DD`), defaults to today |
+
+### Authorization & Team-scoping
+
+| Role | Scope |
+|------|-------|
+| **Admin** | Can override any employee across all teams |
+| **Team Lead** | Can only override employees within their own team |
+| **Employee** | Cannot use this command |
+
+- Minimum role requirement: `UserRole.TEAM_LEAD` (hierarchy level 1+)
+- Team-scoping is enforced in `OverrideService.check_team_scope()`
+- The target employee's team is derived from their Discord roles via `extract_team_from_roles()`
+
+---
+
 ## Security
 
 ### Signature Verification
