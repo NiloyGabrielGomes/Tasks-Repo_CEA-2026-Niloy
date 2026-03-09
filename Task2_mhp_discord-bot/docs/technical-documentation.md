@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.3.0  
-> **Last Updated:** 2026-03-04  
-> **Status:** Issue #4 Complete — Work Location for Employees
-> **Addressed Issues:** #1, #2, #3, #4
+> **Version:** 1.4.0  
+> **Last Updated:** 2026-03-09  
+> **Status:** Issue #5 Complete — Admin/Team Lead Override Support
+> **Addressed Issues:** #1, #2, #3, #4, #5
 
 ---
 
@@ -17,8 +17,9 @@
 6. [Authentication & Authorization](#authentication--authorization)
 7. [Meal Participation](#meal-participation)
 8. [Work Location](#work-location)
-9. [Security](#security)
-10. [Future Enhancements](#future-enhancements)
+9. [Override Update](#override-update)
+10. [Security](#security)
+11. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -629,7 +630,6 @@ Recommended secrets:
 
 ### Planned Features
 
-- **Override Support** (Issue #5) — TL/Admin override for missing entries
 - **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands
 - **EventBridge Integration** — Scheduled daily summary generation
 - **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
