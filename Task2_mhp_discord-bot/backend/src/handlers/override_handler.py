@@ -52,3 +52,60 @@ def _get_command_options(interaction: Dict[str, Any]) -> dict[str, Any]:
         else:
             result[opt["name"]] = opt["value"]
     return result
+
+# ── Embed builder ────────────────────────────────────────────────────────────
+
+def _build_override_embed(
+    target_user_id: str,
+    target_username: str,
+    target_date: date,
+    current_state: dict,
+    confirmation: str | None = None,
+) -> Dict[str, Any]:
+    # Meal fields
+    fields = []
+    for meal_type in DEFAULT_MEAL_TYPES:
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        is_in = current_state["meals"].get(meal_type, True)
+        status_emoji = "✅" if is_in else "❌"
+        status_text = "Opted In" if is_in else "Opted Out"
+        fields.append({
+            "name": f"{display['emoji']} {display['label']}",
+            "value": f"{status_emoji} {status_text}",
+            "inline": True,
+        })
+
+    # Location field
+    loc = current_state["location"]
+    loc_display = LOCATION_DISPLAY.get(loc, {"label": loc.value, "emoji": "📍"})
+    fields.append({
+        "name": f"{loc_display['emoji']} Work Location",
+        "value": f"**{loc_display['label']}**",
+        "inline": True,
+    })
+
+    description_parts = [
+        f"👤 **Employee:** <@{target_user_id}>"
+        f" ({target_username})",
+        f"📅 **Date:** {format_date_display(target_date)}",
+    ]
+
+    if confirmation:
+        description_parts.append("")
+        description_parts.append(confirmation)
+
+    description_parts.append("")
+    description_parts.append("Use the buttons below to update this employee's records.")
+
+    embed = {
+        "title": "🔧 Override Update",
+        "description": "\n".join(description_parts),
+        "fields": fields,
+        "color": OVERRIDE_EMBED_COLOR,
+        "footer": {
+            "text": "Overrides are recorded for audit purposes"
+        },
+    }
+
+    return embed
+
