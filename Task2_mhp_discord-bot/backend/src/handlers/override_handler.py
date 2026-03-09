@@ -356,3 +356,91 @@ def handle_override_meal(
             },
         }
 
+# ── Location override button handler ─────────────────────────────────────────
+
+def handle_override_location(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    try:
+        data = interaction.get("data", {})
+        custom_id = data.get("custom_id", "")
+
+        parts = custom_id.split(":")
+        if len(parts) != 5 or parts[0] != OVERRIDE_LOC_PREFIX:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": "❌ Invalid button interaction.", "flags": 64},
+            }
+
+        _, actor_id, target_user_id, date_str, loc_str = parts
+
+        if user.discord_id != actor_id:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {
+                    "content": "❌ Only the user who initiated the override can use these buttons.",
+                    "flags": 64,
+                },
+            }
+
+        target_date = date.fromisoformat(date_str)
+
+        try:
+            location = WorkLocationType(loc_str)
+        except ValueError:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": f"❌ Unknown location type: {loc_str}", "flags": 64},
+            }
+
+        target_team = user.team
+
+        success, result = override_service.override_location(
+            target_user_id=target_user_id,
+            target_date=target_date,
+            location=location,
+            actor_id=user.discord_id,
+            target_team=target_team,
+        )
+
+        if not success:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": f"❌ {result}", "flags": 64},
+            }
+
+        current_state = override_service.get_target_current_state(
+            target_user_id, target_date
+        )
+
+        loc_display = LOCATION_DISPLAY.get(location, {"label": location.value, "emoji": "📍"})
+        confirmation = (
+            f"✅ Updated **{loc_display['emoji']} Work Location** → "
+            f"**{loc_display['label']}** for <@{target_user_id}>"
+        )
+
+        embed = _build_override_embed(
+            target_user_id, target_user_id, target_date, current_state,
+            confirmation=confirmation,
+        )
+        components = _build_override_buttons(
+            user.discord_id, target_user_id, target_date, current_state
+        )
+
+        return {
+            "type": RESPONSE_UPDATE_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+            },
+        }
+
+    except Exception as e:
+        logger.exception("Error handling override location: %s", e)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "content": "❌ An error occurred while processing the location override. Please try again.",
+                "flags": 64,
+            },
+        }
