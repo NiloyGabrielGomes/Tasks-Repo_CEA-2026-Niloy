@@ -1,0 +1,12 @@
+{
+  "resource": "/interactions",
+  "path": "/interactions",
+  "httpMethod": "POST",
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Signature-Ed25519": "test_signature",
+    "X-Signature-Timestamp": "1709740800"
+  },
+  "body": "{\"type\": 1}",
+  "isBase64Encoded": false
+}

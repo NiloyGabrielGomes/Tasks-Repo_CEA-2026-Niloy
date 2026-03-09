@@ -22,9 +22,9 @@ class Settings(BaseModel):
     ROLE_ADMIN_ID: str = ""
     ROLE_TEAM_LEAD_ID: str = ""
 
-    DYNAMODB_TABLE_NAME: str = "MHP-Data"
+    DYNAMODB_TABLE_NAME: str = "trainee-2026-niloy-mhp-data"
 
-    S3_BUCKET: str = "mhp-reports"
+    S3_BUCKET: str = "trainee-2026-niloy-mhp-reports"
     S3_PREFIX: str = "reports/"
 
     CUTOFF_TIME: str = "21:00"  # HH:MM in Asia/Dhaka (UTC+6)
@@ -52,8 +52,8 @@ def get_settings() -> Settings:
         ROLE_EMPLOYEE=os.getenv("ROLE_EMPLOYEE", "MHP-Employee"),
         ROLE_ADMIN_ID=os.getenv("ROLE_ADMIN_ID", ""),
         ROLE_TEAM_LEAD_ID=os.getenv("ROLE_TEAM_LEAD_ID", ""),
-        DYNAMODB_TABLE_NAME=os.getenv("DYNAMODB_TABLE_NAME", "MHP-Data"),
-        S3_BUCKET=os.getenv("S3_BUCKET", "mhp-reports"),
+        DYNAMODB_TABLE_NAME=os.getenv("DYNAMODB_TABLE_NAME", "trainee-2026-niloy-mhp-data"),
+        S3_BUCKET=os.getenv("S3_BUCKET", "trainee-2026-niloy-mhp-reports"),
         S3_PREFIX=os.getenv("S3_PREFIX", "reports/"),
         CUTOFF_TIME=os.getenv("CUTOFF_TIME", "21:00"),
         WFH_MONTHLY_CAP=int(os.getenv("WFH_MONTHLY_CAP", "5")),
