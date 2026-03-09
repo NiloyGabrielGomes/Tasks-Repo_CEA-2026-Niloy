@@ -176,3 +176,88 @@ def _build_override_buttons(
     ]
     return rows
 
+# ── Command handler ──────────────────────────────────────────────────────────
+
+def handle_override_update(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    try:
+        options = _get_command_options(interaction)
+        target_user_id = options.get("employee")
+        date_str = options.get("date")
+
+        if not target_user_id:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {
+                    "content": "❌ Please select an employee to override.",
+                    "flags": 64,
+                },
+            }
+
+        try:
+            target_date = parse_date_option(date_str)
+        except ValueError as e:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": f"❌ {e}", "flags": 64},
+            }
+
+        is_valid, error_msg = validate_date_for_update(target_date)
+        if not is_valid:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": f"❌ {error_msg}", "flags": 64},
+            }
+
+        target_team = None
+        resolved_member = options.get(f"_resolved_member_employee")
+        if resolved_member:
+            target_roles = resolved_member.get("roles", [])
+            target_team = extract_team_from_roles(target_roles)
+
+        # Team scope check
+        allowed, scope_err = override_service.check_team_scope(
+            actor_role=user.role,
+            actor_team=user.team,
+            target_team=target_team,
+        )
+        if not allowed:
+            return {
+                "type": RESPONSE_CHANNEL_MESSAGE,
+                "data": {"content": scope_err, "flags": 64},
+            }
+
+        current_state = override_service.get_target_current_state(
+            target_user_id, target_date
+        )
+
+        resolved_user = options.get(f"_resolved_user_employee", {})
+        target_username = resolved_user.get("username", target_user_id)
+
+        embed = _build_override_embed(
+            target_user_id, target_username, target_date, current_state
+        )
+        components = _build_override_buttons(
+            user.discord_id, target_user_id, target_date, current_state
+        )
+
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+                "flags": 64,
+            },
+        }
+
+    except Exception as e:
+        logger.exception("Error handling override-update: %s", e)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "content": "❌ An error occurred while processing the override. Please try again.",
+                "flags": 64,
+            },
+        }
+
