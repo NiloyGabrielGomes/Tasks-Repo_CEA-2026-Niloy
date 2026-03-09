@@ -97,3 +97,46 @@ class OverrideService:
         )
 
         return True, meal
+    
+    # ── Override work location ───────────────────────────────────────────────
+
+    def override_location(
+        self,
+        target_user_id: str,
+        target_date: date,
+        location: WorkLocationType,
+        actor_id: str,
+        target_team: str | None = None,
+    ) -> tuple[bool, WorkLocation | str]:
+        # Validate date
+        is_valid, error_msg = validate_date_for_update(target_date)
+        if not is_valid:
+            return False, error_msg
+
+        # WFH cap check applies even for overrides
+        if location == WorkLocationType.WFH:
+            over_cap, cap_msg = self.location_svc._check_wfh_cap(
+                target_user_id, target_date
+            )
+            if over_cap:
+                return False, cap_msg
+
+        now = datetime.now(DHAKA_UTC_OFFSET)
+
+        record = WorkLocation(
+            user_id=target_user_id,
+            date=target_date,
+            location=location,
+            team=target_team,
+            updated_by=actor_id,
+            updated_at=now,
+        )
+
+        self.storage.put_location(record)
+
+        logger.info(
+            "Override location: actor=%s, target=%s, date=%s, location=%s",
+            actor_id, target_user_id, target_date, location.value,
+        )
+
+        return True, record
