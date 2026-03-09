@@ -646,6 +646,20 @@ override_loc:{actor_id}:{target_id}:{date}:{location_type}
 - Button clicks by other users are rejected with an ephemeral error
 - The `actor_id` is encoded in the custom ID and verified on every button interaction
 
+### Embed Display
+
+- **Color**: Red (`0xED4245`) — visually distinct from self-service embeds
+- **Fields**: Current meal status (✅/❌) per type + current location
+- **Confirmation**: After each button click, a confirmation line appears in the embed description
+- **Footer**: "Overrides are recorded for audit purposes"
+
+### UI Components
+
+| Row | Buttons | Behavior |
+|-----|---------|----------|
+| Row 1 | Meal toggle buttons (Lunch, Snacks) | Green (✅ opted-in) / Red (❌ opted-out) — click toggles |
+| Row 2 | Location buttons (Office, WFH) | Green+disabled (active) / Grey (inactive) — click switches |
+
 ---
 
 ## Security
