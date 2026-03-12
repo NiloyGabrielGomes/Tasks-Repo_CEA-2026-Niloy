@@ -1,8 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.0.0  
+> **Version:** 1.1.0  
 > **Last Updated:** 2026-03-03  
-> **Status:** Issue #1 Complete — Serverless Infrastructure Setup
+> **Status:** Issue #2 Complete — Discord OAuth2 Authentication & Role-based Authorization
+> **Addressed Issues:** #1
 
 ---
 
@@ -13,8 +14,9 @@
 3. [Infrastructure](#infrastructure)
 4. [DynamoDB Schema](#dynamodb-schema)
 5. [Discord Integration](#discord-integration)
-6. [Security](#security)
-7. [Future Enhancements](#future-enhancements)
+6. [Authentication & Authorization](#authentication--authorization)
+7. [Security](#security)
+8. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -52,6 +54,9 @@ User → Discord → API Gateway → Lambda → DynamoDB/S3
                 ↓
          PyNaCl Signature
          Verification
+         ↓
+    Role-based Access
+    Control (RBAC)
 ```
 
 ---
@@ -91,18 +96,45 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 ### Environment Variables
 
+#### Required Secrets (store in AWS Secrets Manager)
+
+| Variable | Description |
+|----------|-------------|
+| `DISCORD_PUBLIC_KEY` | Discord app public key (hex format) |
+| `DISCORD_BOT_TOKEN` | Discord bot token |
+| `DISCORD_CLIENT_SECRET` | Discord OAuth2 client secret |
+| `SECRET_KEY` | Internal JWT signing key |
+
+#### Required Config
+
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DISCORD_PUBLIC_KEY` | Discord app public key | (required) |
 | `DISCORD_APPLICATION_ID` | Discord application ID | (required) |
-| `DISCORD_BOT_TOKEN` | Discord bot token | (required) |
+| `DISCORD_CLIENT_ID` | Discord OAuth2 client ID | (required) |
 | `DISCORD_GUILD_ID` | Discord server ID | (required) |
+| `DISCORD_REDIRECT_URI` | OAuth2 callback URI | (required) |
+| `ROLE_ADMIN_ID` | Discord role ID for admins | (optional) |
+| `ROLE_TEAM_LEAD_ID` | Discord role ID for team leads | (optional) |
+
+#### Application Config
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `DYNAMODB_TABLE_NAME` | DynamoDB table name | `mhp-dev-data` |
 | `S3_BUCKET` | S3 bucket name | `mhp-dev-reports` |
 | `CUTOFF_TIME` | Meal update cutoff (Dhaka) | `21:00` |
 | `WFH_MONTHLY_CAP` | WFH days per month | `5` |
 | `FORWARD_PLANNING_DAYS` | Max days ahead to book | `7` |
 | `TIMEZONE` | timezone | `Asia/Dhaka` |
+| `DEBUG` | Enable debug mode | `false` |
+
+#### Role Mapping Config
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ROLE_ADMIN` | Discord role name for admins | `MHP-Admin` |
+| `ROLE_TEAM_LEAD` | Discord role name for team leads | `MHP-TeamLead` |
+| `ROLE_EMPLOYEE` | Default role for employees | `MHP-Employee` |
 
 ---
 
@@ -146,7 +178,7 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 class User:
     discord_id: str      # Primary identifier
     name: str           # Display name
-    email: str          # Email (optional)
+    email: str         # Email (optional)
     role: UserRole     # employee, team_lead, admin
     team: str          # Team name (optional)
     is_active: bool    # Account status
@@ -164,7 +196,7 @@ class MealParticipation:
     team: str             # Team name stamped from Discord role at write time
     updated_by: str       # Who made the update
     updated_at: datetime
-    reason: str           # Optional reason for change
+    reason: str          # Optional reason for change
 ```
 
 #### WorkLocation
@@ -206,7 +238,9 @@ class Policy:
 1. **Slash Command** — User types `/meal-update` in Discord
 2. **Discord to Lambda** — Discord sends HTTP POST to API Gateway endpoint
 3. **Signature Verification** — PyNaCl verifies Ed25519 signature
-4. **Process & Respond** — Lambda processes request and returns response
+4. **Authentication** — Extract user identity and roles from interaction payload
+5. **Authorization** — Check if user has permission for the command
+6. **Process & Respond** — Lambda processes request and returns response
 
 ### Signature Verification
 
@@ -232,12 +266,107 @@ verify_key.verify(message, bytes.fromhex(signature), encoder=RawEncoder)
 
 ---
 
+## Authentication & Authorization
+
+### Overview
+
+The bot uses Discord as the identity provider. Every interaction includes user identity and server roles, eliminating the need for separate login flows.
+
+### Authentication Flow
+
+```
+1. User interacts with bot (slash command / button)
+         ↓
+2. Discord sends interaction to Lambda
+         ↓
+3. PyNaCl verifies signature
+         ↓
+4. Extract user from interaction payload:
+   - discord_id
+   - username
+   - global_name
+   - guild_id
+   - roles (list of role IDs)
+         ↓
+5. Map Discord roles to application role
+         ↓
+6. Create AuthenticatedUser object
+```
+
+### User Extraction
+
+```python
+@dataclass
+class AuthenticatedUser:
+    discord_id: str           # User's Discord ID
+    username: str            # Discord username
+    global_name: Optional[str]  # Display name
+    role: UserRole          # Mapped application role
+    team: Optional[str]      # Derived from Discord roles
+    guild_id: str           # Server ID
+    discord_roles: list[str]  # Raw Discord role IDs
+```
+
+### Role Mapping
+
+Discord server roles are mapped to application roles:
+
+| Discord Role | Application Role | Permission Level |
+|--------------|------------------|------------------|
+| MHP-Admin (role ID) | `admin` | 2 (highest) |
+| MHP-TeamLead (role ID) | `team_lead` | 1 |
+| (no special role) | `employee` | 0 (lowest) |
+
+### Authorization Implementation
+
+```python
+# Command role requirements (defined in auth.py)
+COMMAND_ROLE_REQUIREMENTS = {
+    "meal-update": UserRole.EMPLOYEE,
+    "work-location": UserRole.EMPLOYEE,
+    "team-summary": UserRole.TEAM_LEAD,
+    "headcount-summary": UserRole.ADMIN,
+    "override-update": UserRole.ADMIN,
+    "generate-summary": UserRole.ADMIN,
+}
+
+def check_command_authorization(command_name: str, user: AuthenticatedUser):
+    required_role = COMMAND_ROLE_REQUIREMENTS.get(command_name)
+    if user.role.level < required_role.level:
+        return False, "❌ You don't have permission to use this command."
+    return True, None
+```
+
+### Unauthorized Response
+
+When a user tries to execute a command they don't have permission for:
+
+```json
+{
+  "type": 4,
+  "data": {
+    "content": "❌ You don't have permission to use this command. Required role: admin",
+    "flags": 64
+  }
+}
+```
+
+The `flags: 64` makes the message ephemeral (only the user sees it).
+
+---
+
 ## Security
 
 ### Signature Verification
 
 - All Discord requests verified with Ed25519 (PyNaCl)
 - Invalid signatures return 401 Unauthorized
+
+### Role-based Access Control
+
+- Users can only execute commands permitted by their role
+- Role mapping happens on every interaction (no cached roles)
+- Unauthorized attempts are logged and return clear error messages
 
 ### AWS IAM
 
@@ -251,6 +380,20 @@ Required scopes:
 - `applications.commands` — Slash commands
 - `bot` — Bot user
 
+### Secrets Management
+
+For production deployments, store sensitive values in AWS Secrets Manager:
+
+```
+Secrets Manager → Lambda Environment Variables → Application
+```
+
+Recommended secrets:
+- `DISCORD_PUBLIC_KEY`
+- `DISCORD_BOT_TOKEN`
+- `DISCORD_CLIENT_SECRET`
+- `SECRET_KEY`
+
 ---
 
 ## Future Enhancements
@@ -261,6 +404,7 @@ Required scopes:
 - **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
 - **Web Dashboard** — Separate web interface for admins (Task 3)
 - **Discord Announcements** — Auto-post summaries to channels
+- **OAuth2 Flow** — For web dashboard authentication and discord and lambda request processing
 
 ---
 
