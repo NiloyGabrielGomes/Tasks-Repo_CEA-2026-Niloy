@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.1.0  
-> **Last Updated:** 2026-03-03  
-> **Status:** Issue #2 Complete — Discord OAuth2 Authentication & Role-based Authorization
-> **Addressed Issues:** #1
+> **Version:** 1.2.0  
+> **Last Updated:** 2026-03-04  
+> **Status:** Issue #3 Complete — Meal Participation for Employees
+> **Addressed Issues:** #1, #2, #3
 
 ---
 
@@ -15,8 +15,9 @@
 4. [DynamoDB Schema](#dynamodb-schema)
 5. [Discord Integration](#discord-integration)
 6. [Authentication & Authorization](#authentication--authorization)
-7. [Security](#security)
-8. [Future Enhancements](#future-enhancements)
+7. [Meal Participation](#meal-participation)
+8. [Security](#security)
+9. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -355,6 +356,125 @@ The `flags: 64` makes the message ephemeral (only the user sees it).
 
 ---
 
+## Meal Participation
+
+### Overview
+
+Employees can view and toggle their meal participation for any eligible date via the `/meal-update` slash command. The bot responds with an interactive embed containing toggle buttons for each meal type. Default participation is **opted-in** — employees explicitly opt out.
+
+### Command: `/meal-update`
+
+```
+/meal-update [date:YYYY-MM-DD]
+```
+
+- **date** (optional) — Target date. Defaults to today (Asia/Dhaka).
+- **Access** — All authenticated users (Employee+).
+
+### Flow
+
+```
+1. User types /meal-update [date]
+         ↓
+2. Lambda validates date:
+   - Not in the past
+   - Not past cutoff (21:00 Dhaka)
+   - Within forward window (7 days)
+         ↓
+3. Query DynamoDB for user's meal records on that date
+         ↓
+4. Build embed showing status per meal type + toggle buttons
+         ↓
+5. Return ephemeral response with embed + buttons
+         ↓
+6. User clicks a button → component interaction
+         ↓
+7. Lambda toggles the meal record in DynamoDB
+         ↓
+8. Return UPDATE_MESSAGE with refreshed embed + buttons
+```
+
+### Validation Rules
+
+| Rule | Behavior |
+|------|----------|
+| Past date | Rejected — "Cannot update past dates" |
+| After cutoff (21:00 Dhaka) | Rejected — "Updates for {date} are closed" |
+| Beyond forward window | Rejected — "Cannot update dates more than 7 days ahead" |
+| Invalid date format | Rejected — "Invalid date format. Use YYYY-MM-DD" |
+
+### Meal Types
+
+Default daily meal types:
+
+| Meal Type | Emoji | Default Status |
+|-----------|-------|----------------|
+| Lunch | 🍱 | Opted In |
+| Snacks | 🍕 | Opted In |
+
+Additional types (activated per-date in future issues):
+
+| Meal Type | Emoji | Trigger |
+|-----------|-------|--------|
+| Iftar | 🌙 | Ramadan period |
+| Event Dinner | 🎉 | Event meal (Issue #13) |
+| Optional Dinner | 🍽️ | Special occasions |
+
+### Toggle Behavior
+
+- **No record exists** → Default is opted-in → First toggle creates record with `is_participating: false`
+- **Record exists with `true`** → Toggle to `false` (opt out)
+- **Record exists with `false`** → Toggle to `true` (opt back in)
+- Every toggle stores `updated_by` (Discord ID) and `updated_at` (timestamp)
+
+### Discord Response Format
+
+#### Initial Embed Response
+
+```json
+{
+  "type": 4,
+  "data": {
+    "embeds": [{
+      "title": "🍽️ Meal Participation",
+      "description": "📅 **Wednesday, March 04, 2026**\n\nClick a button below to toggle...",
+      "fields": [
+        { "name": "🍱 Lunch", "value": "✅ Opted In", "inline": true },
+        { "name": "🍕 Snacks", "value": "✅ Opted In", "inline": true }
+      ],
+      "color": 5793266
+    }],
+    "components": [{
+      "type": 1,
+      "components": [
+        { "type": 2, "style": 3, "label": "🍱 Lunch ✅", "custom_id": "meal_toggle:USER_ID:2026-03-04:lunch" },
+        { "type": 2, "style": 3, "label": "🍕 Snacks ✅", "custom_id": "meal_toggle:USER_ID:2026-03-04:snacks" }
+      ]
+    }],
+    "flags": 64
+  }
+}
+```
+
+#### Button Toggle Response
+
+After clicking a button, the original message is updated in place (type 7 — UPDATE_MESSAGE):
+- Embed description includes confirmation: "Updated **🍱 Lunch** → ❌ Opted Out"
+- Button style changes: Green (3) → Red (4) or vice versa
+- Button label updates: ✅ ↔ ❌
+
+### Button Custom ID Format
+
+```
+meal_toggle:{discord_id}:{date}:{meal_type}
+```
+
+Example: `meal_toggle:111222333:2026-03-04:lunch`
+
+Security: The handler verifies the clicking user matches the `discord_id` in the custom ID. Users cannot toggle other users' buttons.
+
+---
+
 ## Security
 
 ### Signature Verification
@@ -400,6 +520,9 @@ Recommended secrets:
 
 ### Planned Features
 
+- **Work Location** (Issue #4) — `/work-location` command for Office/WFH toggle
+- **Override Support** (Issue #5) — TL/Admin override for missing entries
+- **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands
 - **EventBridge Integration** — Scheduled daily summary generation
 - **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
 - **Web Dashboard** — Separate web interface for admins (Task 3)
