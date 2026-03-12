@@ -1,0 +1,213 @@
+# AWS SAM Template for MHP Discord Bot
+# Serverless Application Model - Infrastructure as Code
+
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Meal Headcount Planner Discord Bot - Serverless Infrastructure
+
+# Parameters
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Deployment environment
+
+  DiscordPublicKey:
+    Type: String
+    NoEcho: true
+    Description: Discord application public key for signature verification
+
+  DiscordApplicationId:
+    Type: String
+    Description: Discord application ID
+
+  DiscordBotToken:
+    Type: String
+    NoEcho: true
+    Description: Discord bot token
+
+  DiscordGuildId:
+    Type: String
+    Description: Discord server/guild ID
+
+# Globals
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        DISCORD_PUBLIC_KEY: !Ref DiscordPublicKey
+        DISCORD_APPLICATION_ID: !Ref DiscordApplicationId
+        DISCORD_BOT_TOKEN: !Ref DiscordBotToken
+        DISCORD_GUILD_ID: !Ref DiscordGuildId
+        DYNAMODB_TABLE_NAME: !Ref DynamoDBTable
+        S3_BUCKET: !Ref S3Bucket
+        CUTOFF_TIME: "21:00"
+        WFH_MONTHLY_CAP: "5"
+        FORWARD_PLANNING_DAYS: "7"
+        TIMEZONE: "Asia/Dhaka"
+
+# Resources
+Resources:
+  # DynamoDB Table - Single Table Design (No GSIs needed)
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub trainee-2026-niloy-mhp-${Environment}-data
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: MHP-Discord-Bot
+
+  # S3 Bucket for Reports
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub trainee-2026-niloy-mhp-${Environment}-reports
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: MHP-Discord-Bot
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub trainee-2026-niloy-mhp-lambda-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub trainee-2026-niloy-mhp-dynamodb-policy-${Environment}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt DynamoDBTable.Arn
+        - PolicyName: !Sub trainee-2026-niloy-mhp-s3-policy-${Environment}
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt S3Bucket.Arn
+                  - !Sub ${S3Bucket.Arn}/*
+
+  # Discord Interaction Lambda Function
+  InteractionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub trainee-2026-niloy-mhp-interaction-${Environment}
+      Handler: src.handlers.interaction.lambda_handler
+      CodeUri: ../src
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /interactions
+            Method: POST
+            RestApiId: !Ref DiscordApi
+
+  # Discord API Gateway
+  DiscordApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub trainee-2026-niloy-mhp-discord-api-${Environment}
+      StageName: !Ref Environment
+      DefinitionBody:
+        openapi: "3.0.1"
+        info:
+          title: MHP Discord Bot API
+          version: "1.0"
+        paths:
+          /interactions:
+            post:
+              x-amazon-apigateway-integration:
+                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${InteractionFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+
+  # Permission for API Gateway to invoke Lambda
+  ApiGatewayLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref InteractionFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DiscordApi}/${Environment}/POST/interactions
+
+# Outputs
+Outputs:
+  DynamoDBTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref DynamoDBTable
+    Export:
+      Name: !Sub ${AWS::StackName}-DynamoDBTable
+
+  S3BucketName:
+    Description: S3 Bucket Name for Reports
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub ${AWS::StackName}-S3Bucket
+
+  DiscordApiEndpoint:
+    Description: Discord API Endpoint URL
+    Value: !Sub https://${DiscordApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/interactions
+    Export:
+      Name: !Sub ${AWS::StackName}-DiscordApiEndpoint
+
+  InteractionFunctionArn:
+    Description: Interaction Lambda Function ARN
+    Value: !GetAtt InteractionFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-InteractionFunctionArn
