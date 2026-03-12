@@ -8,12 +8,16 @@ from nacl.signing import VerifyKey
 from nacl.encoding import RawEncoder
 
 from src.config import settings
-from src.services.discord_helpers import extract_team_from_roles
 
 from src.handlers.auth import (
     AuthenticatedUser,
     get_user_from_interaction as auth_get_user,
     check_command_authorization,
+)
+from src.handlers.meal_handler import (
+    handle_meal_update,
+    handle_meal_toggle,
+    MEAL_TOGGLE_PREFIX,
 )
 from src.models import UserRole
 
@@ -85,22 +89,6 @@ def parse_interaction(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_user_from_interaction(interaction: Dict[str, Any]) -> Dict[str, Any]:
-    
-    member = interaction.get("member", {})
-    user = interaction.get("user", {})
-    roles = member.get("roles", [])
-    
-    return {
-        "id": member.get("user", {}).get("id") or user.get("id", ""),
-        "username": member.get("user", {}).get("username") or user.get("username", ""),
-        "global_name": member.get("user", {}).get("global_name") or user.get("global_name"),
-        "roles": roles,
-        "team": extract_team_from_roles(roles),
-        "guild_id": member.get("guild_id") or interaction.get("guild_id", ""),
-    }
-
-
 def get_command_name(interaction: Dict[str, Any]) -> str:
 
     data = interaction.get("data", {})
@@ -129,7 +117,10 @@ def route_command(interaction: Dict[str, Any], user: AuthenticatedUser) -> Dict[
     if not is_authorized:
         return create_error_response(error_msg)
     
-    # Placeholder response - feature handlers will be added in subsequent issues
+    if command_name == "meal-update":
+        return handle_meal_update(interaction, user)
+    
+    # Placeholder response for unimplemented commands
     return {
         "type": RESPONSE_CHANNEL_MESSAGE,
         "data": {
@@ -137,9 +128,14 @@ def route_command(interaction: Dict[str, Any], user: AuthenticatedUser) -> Dict[
             "flags": 64  # Ephemeral
         }
     }
-
-
 def handle_component_interaction(interaction: Dict[str, Any], user: AuthenticatedUser) -> Dict[str, Any]:
+    data = interaction.get("data", {})
+    custom_id = data.get("custom_id", "")
+    
+    if custom_id.startswith(MEAL_TOGGLE_PREFIX):
+        return handle_meal_toggle(interaction, user)
+    
+    # Placeholder for unhandled component interactions
     return {
         "type": RESPONSE_CHANNEL_MESSAGE,
         "data": {
