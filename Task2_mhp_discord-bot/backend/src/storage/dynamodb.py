@@ -26,7 +26,7 @@ class DynamoDBStorage:
             try:
                 self._dynamodb_resource = boto3.resource(
                     "dynamodb",
-                    region_name=os.getenv("AWS_REGION", "ap-southeast-1")
+                    region_name=os.getenv("AWS_REGION", "ap-south-1")
                 )
             except Exception as e:
                 raise RuntimeError(
