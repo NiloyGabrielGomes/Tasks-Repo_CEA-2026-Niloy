@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.2.0  
+> **Version:** 1.3.0  
 > **Last Updated:** 2026-03-04  
-> **Status:** Issue #3 Complete — Meal Participation for Employees
-> **Addressed Issues:** #1, #2, #3
+> **Status:** Issue #4 Complete — Work Location for Employees
+> **Addressed Issues:** #1, #2, #3, #4
 
 ---
 
@@ -16,8 +16,9 @@
 5. [Discord Integration](#discord-integration)
 6. [Authentication & Authorization](#authentication--authorization)
 7. [Meal Participation](#meal-participation)
-8. [Security](#security)
-9. [Future Enhancements](#future-enhancements)
+8. [Work Location](#work-location)
+9. [Security](#security)
+10. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -475,6 +476,114 @@ Security: The handler verifies the clicking user matches the `discord_id` in the
 
 ---
 
+## Work Location
+
+### Overview
+
+Employees can view and set their work location (Office or Work From Home) for any eligible date via the `/work-location` slash command. The bot responds with an interactive embed containing Office/WFH buttons. Default location is **Office** — employees explicitly switch to WFH. WFH usage is subject to a configurable monthly soft cap (`WFH_MONTHLY_CAP`, default 5).
+
+### Command: `/work-location`
+
+```
+/work-location [date:YYYY-MM-DD]
+```
+
+- **date** (optional) — Target date. Defaults to today (Asia/Dhaka).
+- **Access** — All authenticated users (Employee+).
+
+### Flow
+
+```
+1. User types /work-location [date]
+         ↓
+2. Lambda validates date:
+   - Not in the past
+   - Not past cutoff (21:00 Dhaka)
+   - Within forward window (7 days)
+         ↓
+3. Query DynamoDB for user's location record on that date
+         ↓
+4. Build embed showing current location + Office/WFH buttons
+         ↓
+5. Return ephemeral response with embed + buttons
+         ↓
+6. User clicks a button → component interaction
+         ↓
+7. Lambda validates and sets the location in DynamoDB
+   (if WFH, checks monthly cap first)
+         ↓
+8. Return UPDATE_MESSAGE with refreshed embed + buttons
+```
+
+### Validation Rules
+
+Same date validation rules as Meal Participation:
+
+| Rule | Behavior |
+|------|----------|
+| Past date | Rejected — "Cannot update past dates" |
+| After cutoff (21:00 Dhaka) | Rejected — "Updates for {date} are closed" |
+| Beyond forward window | Rejected — "Cannot update dates more than 7 days ahead" |
+| Invalid date format | Rejected — "Invalid date format. Use YYYY-MM-DD" |
+| WFH monthly cap exceeded | Rejected — "You have used N/5 WFH days this month" |
+
+### WFH Monthly Cap
+
+- **Default cap:** 5 days per calendar month (configurable via `WFH_MONTHLY_CAP`)
+- **Enforcement:** Soft limit — rejects the switch to WFH when at/over cap
+- **Counting:** Counts WFH records for the same user in the same calendar month, excluding the date being set (to allow toggling back to Office)
+- **Cap = 0:** Disables the cap check entirely
+
+### Location Types
+
+| Location | Emoji | Color | Default? |
+|----------|-------|-------|---------|
+| Office | 🏢 | Green (`0x57F287`) | Yes |
+| Work From Home | 🏠 | Yellow (`0xFEE75C`) | No |
+
+### Toggle Behavior
+
+- **No record exists** → Default is Office → Button shows Office as active (green, disabled)
+- **Click WFH** → Creates/updates record with `location: wfh` → WFH active
+- **Click Office** → Creates/updates record with `location: office` → Office active
+- **Active button** → Green (SUCCESS style), disabled. Inactive → Grey (SECONDARY style), enabled.
+- Every change stores `updated_by`, `updated_at`, and `team` (stamped from Discord role)
+
+### Discord Response Format
+
+#### Initial Embed Response
+
+```json
+{
+  "type": 4,
+  "data": {
+    "embeds": [{
+      "title": "📍 Work Location",
+      "description": "📅 **Wednesday, March 04, 2026**\n\nCurrent location: 🏢 **Office**\n\nClick a button below to change your work location.",
+      "color": 5763831,
+      "footer": { "text": "Default: Office • WFH days count toward monthly cap" }
+    }],
+    "components": [{
+      "type": 1,
+      "components": [
+        { "type": 2, "style": 3, "label": "🏢 Office ✅", "custom_id": "location_set:USER_ID:2026-03-04:office", "disabled": true },
+        { "type": 2, "style": 2, "label": "🏠 Work From Home", "custom_id": "location_set:USER_ID:2026-03-04:wfh", "disabled": false }
+      ]
+    }],
+    "flags": 64
+  }
+}
+```
+
+#### Button Set Response
+
+After clicking a button, the original message is updated in place (type 7 — UPDATE_MESSAGE):
+- Embed description includes confirmation: "Updated → 🏠 **Work From Home**"
+- Button style changes: active = Green (3, disabled), inactive = Grey (2, enabled)
+- Embed color changes: Green for Office, Yellow for WFH
+
+---
+
 ## Security
 
 ### Signature Verification
@@ -520,7 +629,6 @@ Recommended secrets:
 
 ### Planned Features
 
-- **Work Location** (Issue #4) — `/work-location` command for Office/WFH toggle
 - **Override Support** (Issue #5) — TL/Admin override for missing entries
 - **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands
 - **EventBridge Integration** — Scheduled daily summary generation
