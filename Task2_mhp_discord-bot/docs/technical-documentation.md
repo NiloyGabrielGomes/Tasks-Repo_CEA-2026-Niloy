@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.4.0  
-> **Last Updated:** 2026-03-09  
-> **Status:** Issue #5 Complete — Admin/Team Lead Override Support
-> **Addressed Issues:** #1, #2, #3, #4, #5
+> **Version:** 1.5.0
+> **Last Updated:** 2026-03-18
+> **Status:** Issues #20 & #21 Complete — DynamoDB Schema Redesign (User-first + GSIs)
+> **Addressed Issues:** #1, #2, #3, #4, #5, #20, #21
 
 ---
 
@@ -13,6 +13,10 @@
 2. [Architecture](#architecture)
 3. [Infrastructure](#infrastructure)
 4. [DynamoDB Schema](#dynamodb-schema)
+   - [Design Principles](#design-principles)
+   - [Key Structure](#key-structure)
+   - [Access Patterns](#access-patterns)
+   - [Data Models](#data-models)
 5. [Discord Integration](#discord-integration)
 6. [Authentication & Authorization](#authentication--authorization)
 7. [Meal Participation](#meal-participation)
@@ -86,10 +90,13 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 #### DynamoDB Table
 
-- **Name:** `mhp-{environment}-data`
-- **Billing:** Pay-per-request (on-demand)
-- **Keys:** PK (Partition Key), SK (Sort Key)
-- **GSIs:** None required
+- **Name:** `trainee-2026-niloy-mhp-{environment}-data`
+- **Billing:** Provisioned (5 RCU / 5 WCU)
+- **Keys:** PK (Partition Key, String), SK (Sort Key, String)
+- **GSIs:**
+  - `GSI1` — date-centric: HASH=`GSI1PK`, RANGE=`GSI1SK` (5 RCU/WCU, ProjectionType=ALL)
+  - `GSI2` — identity/team-centric: HASH=`GSI2PK`, RANGE=`GSI2SK` (5 RCU/WCU, ProjectionType=ALL)
+- **IAM:** Lambda execution role includes `!Sub ${DynamoDBTable.Arn}/index/*` so it can query GSIs
 
 #### S3 Bucket
 
@@ -146,32 +153,47 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 ### Design Principles
 
 - **Single-table design** — All entities in one DynamoDB table
-- **No GSIs** — All access patterns use primary key queries
-- **Partition by date** — Most common queries are date-based
-- **Team stamped at write time** — Team name (from the user's Discord team role) is written on every meal/location record. Team queries use `Query` on date PK + `FilterExpression` on `team`. Discord roles remain the source of truth; the stamp is refreshed on every update.
+- **User-first partitioning** — Records are partitioned by `USER#<userId>` so user-history queries (meal history, WFH monthly count) are efficient O(user's records) queries, not full table scans
+- **GSI1 for date-centric headcount** — Every meal and location record carries `GSI1PK=DATE#<date>` / `GSI1SK=MEAL#<userId>#<mealType>` (or `WORKLOC#<userId>`), enabling daily headcount queries without scanning
+- **GSI2 for identity/team listing** — User profiles, teams, and special days carry `GSI2PK` values (`USER`, `TEAM`, `SPECIALDAY#<YYYY-MM>`) for list queries and provider-neutral identity resolution
+- **Provider-neutral identity** — A separate `IDENT#<provider>#<externalId>` lookup item maps any external identity (Discord, future Google Chat) to the internal `user_id`, keeping multi-channel support open without UUID migration
+- **Team stamped at write time** — Team name (from the user's Discord role) is written on every meal/location record. Team queries use GSI1 key condition + `FilterExpression` on `team`. Discord roles remain the source of truth; the stamp is refreshed on every update.
 
 ### Key Structure
 
-| PK (Partition Key) | SK (Sort Key) | Entity Type |
-|---|---|---|
-| `USER#{discord_id}` | `PROFILE` | User profile |
-| `DATE#{date}#MEAL` | `USER#{discord_id}#{meal_type}` | Meal participation |
-| `DATE#{date}#LOCATION` | `USER#{discord_id}` | Work location |
-| `SPECIALDAY#{date}` | `-` | Special day config |
-| `POLICY#{name}` | `-` | Policy settings |
+| PK (Partition Key) | SK (Sort Key) | Entity Type | GSI keys |
+|---|---|---|---|
+| `USER#<userId>` | `PROFILE` | User profile | `GSI2PK=USER`, `GSI2SK=<createdAt>#<userId>` |
+| `USER#<userId>` | `MEAL#<date>#<mealType>` | Meal participation | `GSI1PK=DATE#<date>`, `GSI1SK=MEAL#<userId>#<mealType>` |
+| `USER#<userId>` | `WORKLOC#<date>` | Work location | `GSI1PK=DATE#<date>`, `GSI1SK=WORKLOC#<userId>` |
+| `IDENT#<provider>#<externalId>` | `IDENT#<provider>#<externalId>` | External identity lookup | — |
+| `TEAM#<teamId>` | `METADATA` | Team entity | `GSI2PK=TEAM`, `GSI2SK=<teamName>#<teamId>` |
+| `DAY#<date>` | `METADATA` | Special day config | `GSI2PK=SPECIALDAY#<YYYY-MM>`, `GSI2SK=DAY#<date>` |
+| `POLICY#<name>` | `-` | Policy settings | — |
+
+> `userId` = `discordId` (stable and unique; no UUID indirection needed at current scale).
 
 ### Access Patterns
 
-| Operation | Query | Key Expression |
-|-----------|-------|----------------|
-| Get all meals for date | Query | `PK = DATE#2026-02-26#MEAL` |
-| Get user's meal for date | Query | `PK = DATE#2026-02-26#MEAL`, SK begins with `USER#123` |
-| Get team meals for date | Query + Filter | `PK = DATE#2026-02-26#MEAL`, Filter `team = "Team-Backend"` |
-| Get all locations for date | Query | `PK = DATE#2026-02-26#LOCATION` |
-| Get team locations for date | Query + Filter | `PK = DATE#2026-02-26#LOCATION`, Filter `team = "Team-Backend"` |
-| Get user profile | Get | `PK = USER#123`, `SK = PROFILE` |
-| Get special day | Get | `PK = SPECIALDAY#2026-02-26` |
-| Get policy | Get | `PK = POLICY#cutoff_time` |
+| Operation | Method | Key Expression |
+|-----------|--------|----------------|
+| Get user profile | GetItem | `PK=USER#<id>`, `SK=PROFILE` |
+| List all users | GSI2 Query | `GSI2PK=USER` |
+| Resolve Discord user by ID | GetItem | `PK=IDENT#discord#<discordId>`, `SK=IDENT#discord#<discordId>` |
+| Get meal for user+date+type | GetItem | `PK=USER#<id>`, `SK=MEAL#<date>#<mealType>` |
+| Get meal history for user | Query (main table) | `PK=USER#<id>`, `SK begins_with MEAL#` |
+| Get meal history since date | Query + client filter | `PK=USER#<id>`, `SK begins_with MEAL#`, filter `date >= start` |
+| Get all meals for date | GSI1 Query | `GSI1PK=DATE#<date>`, `GSI1SK begins_with MEAL#` |
+| Get team meals for date | GSI1 Query + Filter | `GSI1PK=DATE#<date>`, `GSI1SK begins_with MEAL#`, `FilterExpression team=<name>` |
+| Get location for user+date | GetItem | `PK=USER#<id>`, `SK=WORKLOC#<date>` |
+| Get locations in date range for user | Query (main table) | `PK=USER#<id>`, `SK between WORKLOC#<start> and WORKLOC#<end>` |
+| Get all locations for date | GSI1 Query | `GSI1PK=DATE#<date>`, `GSI1SK begins_with WORKLOC#` |
+| Get team locations for date | GSI1 Query + Filter | `GSI1PK=DATE#<date>`, `GSI1SK begins_with WORKLOC#`, `FilterExpression team=<name>` |
+| Get team by ID | GetItem | `PK=TEAM#<teamId>`, `SK=METADATA` |
+| List all teams | GSI2 Query | `GSI2PK=TEAM` |
+| Get special day | GetItem | `PK=DAY#<date>`, `SK=METADATA` |
+| Get special days in month | GSI2 Query | `GSI2PK=SPECIALDAY#<YYYY-MM>` |
+| Get policy | GetItem | `PK=POLICY#<name>`, `SK=-` |
 
 ### Data Models
 
@@ -179,56 +201,86 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 ```python
 class User:
-    discord_id: str      # Primary identifier
-    name: str           # Display name
-    email: str         # Email (optional)
-    role: UserRole     # employee, team_lead, admin
-    team: str          # Team name (optional)
-    is_active: bool    # Account status
+    discord_id: str        # Primary identifier (= userId)
+    name: str              # Display name
+    email: Optional[str]   # Email
+    role: UserRole         # employee, team_lead, admin
+    team: Optional[str]    # Team name
+    is_active: bool        # Account status
     created_at: datetime
+    gsi2_pk: Optional[str] # "USER"  (set in storage layer)
+    gsi2_sk: Optional[str] # "<createdAt>#<userId>"  (set in storage layer)
+```
+
+#### ExternalIdentity
+
+```python
+class ExternalIdentity:
+    provider: str      # e.g. "discord", "google_chat"
+    external_id: str   # Provider-specific ID
+    user_id: str       # Internal user_id (= discord_id initially)
+```
+
+Written automatically by `put_user()`. Enables future multi-channel support (Google Chat, etc.) without changing the primary user record.
+
+#### Team
+
+```python
+class Team:
+    team_id: str       # Unique team identifier
+    team_name: str     # Human-readable name
+    created_at: datetime
+    gsi2_pk: Optional[str] # "TEAM"  (set in storage layer)
+    gsi2_sk: Optional[str] # "<teamName>#<teamId>"  (set in storage layer)
 ```
 
 #### MealParticipation
 
 ```python
 class MealParticipation:
-    user_id: str           # Discord user ID
-    date: date            # Meal date
-    meal_type: MealType   # lunch, snacks, iftar, etc.
-    is_participating: bool # True = opted in, False = opted out
-    team: str             # Team name stamped from Discord role at write time
-    updated_by: str       # Who made the update
+    user_id: str             # Discord user ID
+    date: date               # Meal date
+    meal_type: MealType      # lunch, snacks, iftar, etc.
+    is_participating: bool   # True = opted in, False = opted out
+    team: Optional[str]      # Team name stamped from Discord role at write time
+    updated_by: Optional[str]# Who made the update
     updated_at: datetime
-    reason: str          # Optional reason for change
+    reason: Optional[str]    # Optional reason for change
+    gsi1_pk: Optional[str]   # "DATE#<date>"  (set in storage layer)
+    gsi1_sk: Optional[str]   # "MEAL#<userId>#<mealType>"  (set in storage layer)
 ```
 
 #### WorkLocation
 
 ```python
 class WorkLocation:
-    user_id: str           # Discord user ID
-    date: date            # Location date
-    location: WorkLocationType  # office, wfh
-    team: str             # Team name stamped from Discord role at write time
-    updated_by: str       # Who made the update
+    user_id: str              # Discord user ID
+    date: date                # Location date
+    location: WorkLocationType # office, wfh
+    team: Optional[str]       # Team name stamped from Discord role at write time
+    updated_by: Optional[str] # Who made the update
     updated_at: datetime
+    gsi1_pk: Optional[str]    # "DATE#<date>"  (set in storage layer)
+    gsi1_sk: Optional[str]    # "WORKLOC#<userId>"  (set in storage layer)
 ```
 
 #### SpecialDay
 
 ```python
 class SpecialDay:
-    date: date            # The date
-    day_type: DayType    # office_closed, government_holiday, celebration
-    note: str            # Optional note
+    date: date               # The date
+    day_type: DayType        # office_closed, government_holiday, special_event
+    note: Optional[str]      # Optional note
+    gsi2_pk: Optional[str]   # "SPECIALDAY#<YYYY-MM>"  (set in storage layer)
+    gsi2_sk: Optional[str]   # "DAY#<date>"  (set in storage layer)
 ```
 
 #### Policy
 
 ```python
 class Policy:
-    name: str            # Policy name (e.g., "cutoff_time")
-    value: str           # Policy value
+    name: str          # Policy name (e.g., "cutoff_time")
+    value: str         # Policy value
     updated_at: datetime
 ```
 
@@ -678,7 +730,7 @@ override_loc:{actor_id}:{target_id}:{date}:{location_type}
 ### AWS IAM
 
 - Lambda execution role with minimal permissions
-- DynamoDB: GetItem, PutItem, Query, Scan
+- DynamoDB: GetItem, PutItem, UpdateItem, DeleteItem, Query, Scan, BatchWriteItem — on both the table ARN and `index/*` (required for GSI queries)
 - S3: PutObject, GetObject, ListBucket
 
 ### Discord Bot Permissions
@@ -707,12 +759,14 @@ Recommended secrets:
 
 ### Planned Features
 
-- **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands
+- **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands; now unblocked by GSI1 date queries
+- **Special Day Controls** (Issue #9) — Admin commands to mark dates as office-closed or government holidays; GSI2 monthly query already supported
 - **EventBridge Integration** — Scheduled daily summary generation
-- **Team-based Queries** — Team name stamped on records at write time; team queries use `Query` + `FilterExpression`. TL's team derived from interaction payload roles (zero extra API calls). GSI can be added later if filter cost becomes a concern at scale.
+- **Team-based Queries** — Team name stamped on records at write time; team queries use GSI1 key condition + `FilterExpression` on `team`. TL's team derived from interaction payload roles (zero extra API calls).
+- **Multi-channel Identity** — `IDENT#<provider>#<externalId>` lookup pattern is in place; adding Google Chat support only requires a new provider value, no schema changes
 - **Web Dashboard** — Separate web interface for admins (Task 3)
 - **Discord Announcements** — Auto-post summaries to channels
-- **OAuth2 Flow** — For web dashboard authentication and discord and lambda request processing
+- **OAuth2 Flow** — For web dashboard authentication and Discord and Lambda request processing
 
 ---
 
