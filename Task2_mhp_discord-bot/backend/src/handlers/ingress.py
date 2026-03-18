@@ -198,3 +198,72 @@ def _dispatch_component(
         return create_error_response("Feature Lambda returned no response.")
     return result
 
+# ── Lambda entry point ────────────────────────────────────────────────────────
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    logger.info(f"Received event: {event.get('httpMethod')} {event.get('path')}")
+
+    try:
+        interaction = parse_interaction(event)
+        if not interaction:
+            return {
+                "statusCode": 401,
+                "body": json.dumps({"error": "Invalid signature"}),
+            }
+
+        interaction_type = interaction.get("type")
+
+        if interaction_type == INTERACTION_PING:
+            logger.info("Responding to PING")
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": json.dumps({"type": RESPONSE_PONG}),
+            }
+
+        user = auth_get_user(interaction)
+        logger.info(
+            f"User authenticated: {user.username} ({user.discord_id}), role: {user.role.value}"
+        )
+
+        # Authorization check (applies to both routing paths)
+        command_name = get_command_name(interaction) if interaction_type == INTERACTION_APPLICATION_COMMAND else ""
+        if command_name:
+            is_authorized, error_msg = check_command_authorization(command_name, user)
+            if not is_authorized:
+                response = create_error_response(error_msg)
+                return {
+                    "statusCode": 200,
+                    "headers": {"Content-Type": "application/json"},
+                    "body": json.dumps(response),
+                }
+
+        if settings.ENABLE_MULTI_LAMBDA:
+            if interaction_type == INTERACTION_APPLICATION_COMMAND:
+                response = _dispatch_command(interaction, user)
+            elif interaction_type == INTERACTION_MESSAGE_COMPONENT:
+                response = _dispatch_component(interaction, user)
+            else:
+                response = create_error_response(f"Unknown interaction type: {interaction_type}")
+        else:
+            # Fallback: in-process routing (same as original interaction.py)
+            if interaction_type == INTERACTION_APPLICATION_COMMAND:
+                response = _route_command_inprocess(interaction, user)
+            elif interaction_type == INTERACTION_MESSAGE_COMPONENT:
+                response = _route_component_inprocess(interaction, user)
+            else:
+                response = create_error_response(f"Unknown interaction type: {interaction_type}")
+
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(response),
+        }
+
+    except Exception as e:
+        logger.exception(f"Error handling interaction: {e}")
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(create_error_response("An error occurred processing your request")),
+        }
