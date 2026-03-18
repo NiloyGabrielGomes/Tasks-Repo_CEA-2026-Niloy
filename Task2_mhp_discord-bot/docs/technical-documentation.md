@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.4.0  
-> **Last Updated:** 2026-03-09  
-> **Status:** Issue #5 Complete — Admin/Team Lead Override Support
-> **Addressed Issues:** #1, #2, #3, #4, #5
+> **Version:** 1.5.0
+> **Last Updated:** 2026-03-18
+> **Status:** Issues #20 & #21 Complete — DynamoDB Schema Redesign (User-first + GSIs)
+> **Addressed Issues:** #1, #2, #3, #4, #5, #20, #21
 
 ---
 
@@ -86,10 +86,13 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 #### DynamoDB Table
 
-- **Name:** `mhp-{environment}-data`
-- **Billing:** Pay-per-request (on-demand)
-- **Keys:** PK (Partition Key), SK (Sort Key)
-- **GSIs:** None required
+- **Name:** `trainee-2026-niloy-mhp-{environment}-data`
+- **Billing:** Provisioned (5 RCU / 5 WCU)
+- **Keys:** PK (Partition Key, String), SK (Sort Key, String)
+- **GSIs:**
+  - `GSI1` — date-centric: HASH=`GSI1PK`, RANGE=`GSI1SK` (5 RCU/WCU, ProjectionType=ALL)
+  - `GSI2` — identity/team-centric: HASH=`GSI2PK`, RANGE=`GSI2SK` (5 RCU/WCU, ProjectionType=ALL)
+- **IAM:** Lambda execution role includes `!Sub ${DynamoDBTable.Arn}/index/*` so it can query GSIs
 
 #### S3 Bucket
 
