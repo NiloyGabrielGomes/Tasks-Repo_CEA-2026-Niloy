@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.5.0
+> **Version:** 1.6.0
 > **Last Updated:** 2026-03-18
-> **Status:** Issues #20 & #21 Complete — DynamoDB Schema Redesign (User-first + GSIs)
-> **Addressed Issues:** #1, #2, #3, #4, #5, #20, #21
+> **Status:** Issue #19 Complete — Multi-Lambda Architecture
+> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #19, #20, #21
 
 ---
 
@@ -57,13 +57,22 @@ This document covers the technical implementation of the Meal Headcount Planner 
 ### High-Level Flow
 
 ```
-User → Discord → API Gateway → Lambda → DynamoDB/S3
-                ↓
-         PyNaCl Signature
-         Verification
-         ↓
-    Role-based Access
-    Control (RBAC)
+User → Discord → API Gateway → IngressFunction (ingress.py)
+                                    │
+                                    ├── PyNaCl Signature Verification
+                                    ├── Auth + Role-based Access Control
+                                    ├── PING → PONG (direct)
+                                    │
+                                    ├── ENABLE_MULTI_LAMBDA=false (default)
+                                    │     └── In-process routing → handler modules
+                                    │
+                                    └── ENABLE_MULTI_LAMBDA=true
+                                          ├── Slash command → deferred (type 5)
+                                          │     + async invoke → MealFunction /
+                                          │       LocationFunction / OverrideFunction
+                                          │         └── posts follow-up via Discord webhook
+                                          └── Component → sync invoke → feature Lambda
+                                                  └── result returned to Discord
 ```
 
 ---
@@ -74,13 +83,18 @@ User → Discord → API Gateway → Lambda → DynamoDB/S3
 
 All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure/template.yaml) using AWS SAM.
 
-#### Lambda Function
+#### Lambda Functions (Issue #19 — Multi-Lambda Architecture)
 
-- **Function Name:** `mhp-interaction-{environment}`
-- **Runtime:** Python 3.12
-- **Timeout:** 30 seconds
-- **Memory:** 256 MB
-- **Handler:** `src.handlers.interaction.lambda_handler`
+| Function | Name | Handler | IAM Scope |
+|----------|------|---------|-----------|
+| Ingress | `trainee-2026-niloy-mhp-ingress-{env}` | `src.handlers.ingress.lambda_handler` | Lambda invoke only |
+| Meal | `trainee-2026-niloy-mhp-meal-{env}` | `src.handlers.meal_handler.lambda_handler` | DynamoDB + S3 |
+| Location | `trainee-2026-niloy-mhp-location-{env}` | `src.handlers.location_handler.lambda_handler` | DynamoDB + S3 |
+| Override | `trainee-2026-niloy-mhp-override-{env}` | `src.handlers.override_handler.lambda_handler` | DynamoDB + S3 |
+
+- **Runtime:** Python 3.12, **Timeout:** 30 s, **Memory:** 256 MB (all functions)
+- **Dispatch:** Controlled by `ENABLE_MULTI_LAMBDA` env var (default `false` — in-process fallback active)
+- **Legacy entry point:** `src.handlers.interaction.lambda_handler` retained for reference; not deployed
 
 #### API Gateway
 
@@ -137,6 +151,10 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 | `FORWARD_PLANNING_DAYS` | Max days ahead to book | `7` |
 | `TIMEZONE` | timezone | `Asia/Dhaka` |
 | `DEBUG` | Enable debug mode | `false` |
+| `ENABLE_MULTI_LAMBDA` | Route commands to feature Lambdas | `false` |
+| `MEAL_FUNCTION_NAME` | ARN/name of MealFunction | (set by SAM) |
+| `LOCATION_FUNCTION_NAME` | ARN/name of LocationFunction | (set by SAM) |
+| `OVERRIDE_FUNCTION_NAME` | ARN/name of OverrideFunction | (set by SAM) |
 
 #### Role Mapping Config
 
