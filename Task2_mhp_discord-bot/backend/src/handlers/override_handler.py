@@ -4,6 +4,8 @@ from typing import Any, Dict
 
 from src.handlers.auth import AuthenticatedUser
 from src.models import MealType, WorkLocationType, UserRole
+from src.config import settings
+from src.services.discord_follow_up import post_follow_up
 from src.services.override_service import override_service
 from src.services.meal_service import MEAL_DISPLAY, DEFAULT_MEAL_TYPES
 from src.services.location_service import LOCATION_DISPLAY
@@ -443,4 +445,42 @@ def handle_override_location(
                 "content": "❌ An error occurred while processing the location override. Please try again.",
                 "flags": 64,
             },
+        }
+
+
+# ── Feature Lambda entry point (Issue #19) ───────────────────────────────────
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    interaction = event["interaction"]
+    user_dict = event["user"]
+    dispatch_type = event["dispatch_type"]
+
+    user = AuthenticatedUser(
+        discord_id=user_dict["discord_id"],
+        username=user_dict["username"],
+        global_name=user_dict.get("global_name"),
+        role=UserRole(user_dict["role"]),
+        team=user_dict.get("team"),
+        guild_id=user_dict["guild_id"],
+        discord_roles=user_dict.get("discord_roles", []),
+    )
+
+    if dispatch_type == "command":
+        response = handle_override_update(interaction, user)
+        post_follow_up(
+            settings.DISCORD_APPLICATION_ID,
+            interaction["token"],
+            response["data"],
+        )
+        return {"statusCode": 200}
+    else:
+        # Route to the correct component handler based on custom_id prefix
+        custom_id = interaction.get("data", {}).get("custom_id", "")
+        if custom_id.startswith(OVERRIDE_MEAL_PREFIX):
+            return handle_override_meal(interaction, user)
+        if custom_id.startswith(OVERRIDE_LOC_PREFIX):
+            return handle_override_location(interaction, user)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"content": "❌ Unknown override component.", "flags": 64},
         }
