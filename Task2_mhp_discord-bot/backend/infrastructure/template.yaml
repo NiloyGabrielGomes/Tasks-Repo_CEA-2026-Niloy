@@ -52,7 +52,7 @@ Globals:
 
 # Resources
 Resources:
-  # DynamoDB Table - Single Table Design (No GSIs needed)
+  # DynamoDB Table - Single Table Design with GSI1 (date-centric) and GSI2 (identity/team-centric)
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -66,11 +66,42 @@ Resources:
           AttributeType: S
         - AttributeName: SK
           AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
       KeySchema:
         - AttributeName: PK
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -129,6 +160,7 @@ Resources:
                   - dynamodb:BatchWriteItem
                 Resource:
                   - !GetAtt DynamoDBTable.Arn
+                  - !Sub ${DynamoDBTable.Arn}/index/*
         - PolicyName: !Sub trainee-2026-niloy-mhp-s3-policy-${Environment}
           PolicyDocument:
             Version: '2012-10-17'
@@ -154,7 +186,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            Path: /interactions
+            Path: /discord
             Method: POST
             RestApiId: !Ref DiscordApi
 
@@ -170,7 +202,7 @@ Resources:
           title: MHP Discord Bot API
           version: "1.0"
         paths:
-          /interactions:
+          /discord:
             post:
               x-amazon-apigateway-integration:
                 uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${InteractionFunction.Arn}/invocations
@@ -184,7 +216,7 @@ Resources:
       FunctionName: !Ref InteractionFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DiscordApi}/${Environment}/POST/interactions
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DiscordApi}/${Environment}/POST/discord
 
 # Outputs
 Outputs:
@@ -202,7 +234,7 @@ Outputs:
 
   DiscordApiEndpoint:
     Description: Discord API Endpoint URL
-    Value: !Sub https://${DiscordApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/interactions
+    Value: !Sub https://${DiscordApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/discord
     Export:
       Name: !Sub ${AWS::StackName}-DiscordApiEndpoint
 

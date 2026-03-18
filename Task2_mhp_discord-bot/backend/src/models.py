@@ -2,7 +2,6 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
-import uuid
 # ── Enumerations ──────────────────────────────────────────────────────────────
 
 class UserRole(str, Enum):
@@ -32,6 +31,27 @@ class User(BaseModel):
     team: Optional[str] = None
     is_active: bool = True
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    gsi2_pk: Optional[str] = None  # "USER"
+    gsi2_sk: Optional[str] = None  # "<createdAt>#<userId>"
+
+# ── External Identity ─────────────────────────────────────────────────────────
+# Enables multi-channel support (Discord, Google Chat, etc.)
+
+class ExternalIdentity(BaseModel):
+    provider: str           
+    external_id: str        
+    user_id: str            
+
+# ── Team ──────────────────────────────────────────────────────────────────────
+
+class Team(BaseModel):
+    team_id: str
+    team_name: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # GSI2 projection fields
+    gsi2_pk: Optional[str] = None  # "TEAM"
+    gsi2_sk: Optional[str] = None  # "<teamName>#<teamId>"
+
 # ── Meal Participation ────────────────────────────────────────────────────────
 
 class MealParticipation(BaseModel):
@@ -43,6 +63,9 @@ class MealParticipation(BaseModel):
     updated_by: Optional[str] = None  # discord_id of actor
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     reason: Optional[str] = None
+    gsi1_pk: Optional[str] = None  # "DATE#<YYYY-MM-DD>"
+    gsi1_sk: Optional[str] = None  # "MEAL#<userId>#<mealType>"
+
 # ── Work Location ─────────────────────────────────────────────────────────────
 
 class WorkLocation(BaseModel):
@@ -52,12 +75,18 @@ class WorkLocation(BaseModel):
     team: Optional[str] = None  # stamped from Discord role at write time
     updated_by: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    gsi1_pk: Optional[str] = None  # "DATE#<YYYY-MM-DD>"
+    gsi1_sk: Optional[str] = None  # "WORKLOC#<userId>"
+
 # ── Special Day ─────────────────────────────────────────────────────────────
 
 class SpecialDay(BaseModel):
     date: date
     day_type: DayType
     note: Optional[str] = None
+    gsi2_pk: Optional[str] = None  # "SPECIALDAY#<YYYY-MM>"
+    gsi2_sk: Optional[str] = None  # "DAY#<YYYY-MM-DD>"
+
 # ── Policy ─────────────────────────────────────────────────────────────────
 
 class Policy(BaseModel):
