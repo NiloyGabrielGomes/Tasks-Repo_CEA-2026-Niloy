@@ -1,0 +1,117 @@
+import json
+import logging
+import os
+from typing import Any, Dict, Optional
+
+from nacl.signing import VerifyKey
+from nacl.encoding import RawEncoder
+
+from src.config import settings
+from src.handlers.auth import (
+    AuthenticatedUser,
+    get_user_from_interaction as auth_get_user,
+    check_command_authorization,
+)
+from src.handlers.meal_handler import (
+    handle_meal_update,
+    handle_meal_toggle,
+    MEAL_TOGGLE_PREFIX,
+)
+from src.handlers.location_handler import (
+    handle_work_location,
+    handle_location_set,
+    LOCATION_SET_PREFIX,
+)
+from src.handlers.override_handler import (
+    handle_override_update,
+    handle_override_meal,
+    handle_override_location,
+    OVERRIDE_MEAL_PREFIX,
+    OVERRIDE_LOC_PREFIX,
+)
+from src.handlers import dispatcher
+from src.models import UserRole
+
+logger = logging.getLogger(__name__)
+
+# Discord interaction types
+INTERACTION_PING = 1
+INTERACTION_APPLICATION_COMMAND = 2
+INTERACTION_MESSAGE_COMPONENT = 3
+
+# Discord response types
+RESPONSE_PONG = 1
+RESPONSE_CHANNEL_MESSAGE = 4
+RESPONSE_DEFERRED_CHANNEL_MESSAGE = 5
+RESPONSE_DEFERRED_UPDATE_MESSAGE = 6
+RESPONSE_UPDATE_MESSAGE = 7
+
+# ── Signature verification ────────────────────────────────────────────────────
+
+def verify_signature(event_body: str, signature: str, timestamp: str) -> bool:
+    try:
+        public_key = settings.DISCORD_PUBLIC_KEY
+        if not public_key:
+            logger.error("DISCORD_PUBLIC_KEY not configured")
+            return False
+        verify_key = VerifyKey(bytes.fromhex(public_key))
+        message = timestamp.encode() + event_body.encode()
+        verify_key.verify(message, bytes.fromhex(signature), encoder=RawEncoder)
+        return True
+    except Exception as e:
+        logger.error(f"Signature verification failed: {e}")
+        return False
+
+
+def parse_interaction(event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    headers = event.get("headers", {}) or {}
+    signature = headers.get("X-Signature-Ed25519") or headers.get("x-signature-ed25519")
+    timestamp = headers.get("X-Signature-Timestamp") or headers.get("x-signature-timestamp")
+    body = event.get("body", "")
+
+    if settings.DEBUG and os.getenv("SKIP_SIGNATURE_VERIFICATION"):
+        logger.warning("Signature verification skipped (DEBUG mode)")
+    elif not signature or not timestamp:
+        logger.error("Missing signature or timestamp headers")
+        return None
+    elif not verify_signature(body, signature, timestamp):
+        logger.error("Invalid signature")
+        return None
+
+    try:
+        if event.get("isBase64Encoded"):
+            import base64
+            body = base64.b64decode(body).decode("utf-8")
+        return json.loads(body)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON: {e}")
+        return None
+
+
+def get_command_name(interaction: Dict[str, Any]) -> str:
+    return interaction.get("data", {}).get("name", "")
+
+
+def create_error_response(message: str) -> Dict[str, Any]:
+    return {
+        "type": RESPONSE_CHANNEL_MESSAGE,
+        "data": {"content": f"❌ {message}", "flags": 64},
+    }
+
+
+def _deferred_response() -> Dict[str, Any]:
+    return {"type": RESPONSE_DEFERRED_CHANNEL_MESSAGE}
+
+
+def _serialize_user(user: AuthenticatedUser) -> Dict[str, Any]:
+    return {
+        "discord_id": user.discord_id,
+        "username": user.username,
+        "global_name": user.global_name,
+        "role": user.role.value,
+        "team": user.team,
+        "guild_id": user.guild_id,
+        "discord_roles": user.discord_roles,
+    }
+
+
