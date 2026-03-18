@@ -114,4 +114,46 @@ def _serialize_user(user: AuthenticatedUser) -> Dict[str, Any]:
         "discord_roles": user.discord_roles,
     }
 
+# ── In-process routing (fallback path) ───────────────────────────────────────
+
+def _route_command_inprocess(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    command_name = get_command_name(interaction)
+    logger.info(f"In-process routing command: {command_name}")
+
+    if command_name == "meal-update":
+        return handle_meal_update(interaction, user)
+    if command_name == "work-location":
+        return handle_work_location(interaction, user)
+    if command_name == "override-update":
+        return handle_override_update(interaction, user)
+
+    return {
+        "type": RESPONSE_CHANNEL_MESSAGE,
+        "data": {
+            "content": f"🔧 Command `{command_name}` is being implemented. Stay tuned!\n\nYour role: {user.role.value}",
+            "flags": 64,
+        },
+    }
+
+
+def _route_component_inprocess(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    custom_id = interaction.get("data", {}).get("custom_id", "")
+
+    if custom_id.startswith(MEAL_TOGGLE_PREFIX):
+        return handle_meal_toggle(interaction, user)
+    if custom_id.startswith(LOCATION_SET_PREFIX):
+        return handle_location_set(interaction, user)
+    if custom_id.startswith(OVERRIDE_MEAL_PREFIX):
+        return handle_override_meal(interaction, user)
+    if custom_id.startswith(OVERRIDE_LOC_PREFIX):
+        return handle_override_location(interaction, user)
+
+    return {
+        "type": RESPONSE_CHANNEL_MESSAGE,
+        "data": {"content": "🔧 Component interactions are being implemented.", "flags": 64},
+    }
 
