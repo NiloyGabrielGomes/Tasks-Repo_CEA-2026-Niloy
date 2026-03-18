@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any, Dict
 
 from src.handlers.auth import AuthenticatedUser
-from src.models import WorkLocationType
+from src.models import WorkLocationType, UserRole
 from src.services.location_service import location_service, LOCATION_DISPLAY
 from src.utils import parse_date_option, format_date_display, validate_date_for_update
 
@@ -239,3 +239,26 @@ def handle_location_set(
                 "flags": 64,
             },
         }
+
+
+# ── Feature Lambda entry point (Issue #19) ───────────────────────────────────
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    interaction = event["interaction"]
+    user_dict = event["user"]
+    dispatch_type = event["dispatch_type"]
+
+    user = AuthenticatedUser(
+        discord_id=user_dict["discord_id"],
+        username=user_dict["username"],
+        global_name=user_dict.get("global_name"),
+        role=UserRole(user_dict["role"]),
+        team=user_dict.get("team"),
+        guild_id=user_dict["guild_id"],
+        discord_roles=user_dict.get("discord_roles", []),
+    )
+
+    if dispatch_type == "command":
+        return handle_work_location(interaction, user)
+    else:
+        return handle_location_set(interaction, user)

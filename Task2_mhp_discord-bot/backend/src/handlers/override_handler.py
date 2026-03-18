@@ -444,3 +444,35 @@ def handle_override_location(
                 "flags": 64,
             },
         }
+
+
+# ── Feature Lambda entry point (Issue #19) ───────────────────────────────────
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    interaction = event["interaction"]
+    user_dict = event["user"]
+    dispatch_type = event["dispatch_type"]
+
+    user = AuthenticatedUser(
+        discord_id=user_dict["discord_id"],
+        username=user_dict["username"],
+        global_name=user_dict.get("global_name"),
+        role=UserRole(user_dict["role"]),
+        team=user_dict.get("team"),
+        guild_id=user_dict["guild_id"],
+        discord_roles=user_dict.get("discord_roles", []),
+    )
+
+    if dispatch_type == "command":
+        return handle_override_update(interaction, user)
+    else:
+        # Route to the correct component handler based on custom_id prefix
+        custom_id = interaction.get("data", {}).get("custom_id", "")
+        if custom_id.startswith(OVERRIDE_MEAL_PREFIX):
+            return handle_override_meal(interaction, user)
+        if custom_id.startswith(OVERRIDE_LOC_PREFIX):
+            return handle_override_location(interaction, user)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"content": "❌ Unknown override component.", "flags": 64},
+        }
