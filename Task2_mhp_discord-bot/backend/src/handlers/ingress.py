@@ -157,3 +157,44 @@ def _route_component_inprocess(
         "data": {"content": "🔧 Component interactions are being implemented.", "flags": 64},
     }
 
+# ── Multi-Lambda dispatch path ────────────────────────────────────────────────
+
+def _dispatch_command(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    command_name = get_command_name(interaction)
+    fn = dispatcher.get_function_for_command(command_name)
+
+    if not fn:
+        logger.warning(f"No feature Lambda configured for command: {command_name}")
+        return _route_command_inprocess(interaction, user)
+
+    payload = {
+        "dispatch_type": "command",
+        "interaction": interaction,
+        "user": _serialize_user(user),
+    }
+    dispatcher.dispatch(fn, payload, async_mode=True)
+    return _deferred_response()
+
+
+def _dispatch_component(
+    interaction: Dict[str, Any], user: AuthenticatedUser
+) -> Dict[str, Any]:
+    custom_id = interaction.get("data", {}).get("custom_id", "")
+    fn = dispatcher.get_function_for_component(custom_id)
+
+    if not fn:
+        logger.warning(f"No feature Lambda configured for component: {custom_id}")
+        return _route_component_inprocess(interaction, user)
+
+    payload = {
+        "dispatch_type": "component",
+        "interaction": interaction,
+        "user": _serialize_user(user),
+    }
+    result = dispatcher.dispatch(fn, payload, async_mode=False)
+    if result is None:
+        return create_error_response("Feature Lambda returned no response.")
+    return result
+
