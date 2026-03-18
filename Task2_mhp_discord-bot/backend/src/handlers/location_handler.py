@@ -5,8 +5,6 @@ from typing import Any, Dict
 
 from src.handlers.auth import AuthenticatedUser
 from src.models import WorkLocationType, UserRole
-from src.config import settings
-from src.services.discord_follow_up import post_follow_up
 from src.services.location_service import location_service, LOCATION_DISPLAY
 from src.utils import parse_date_option, format_date_display, validate_date_for_update
 
@@ -261,12 +259,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     )
 
     if dispatch_type == "command":
-        response = handle_work_location(interaction, user)
-        post_follow_up(
-            settings.DISCORD_APPLICATION_ID,
-            interaction["token"],
-            response["data"],
-        )
-        return {"statusCode": 200}
+        return handle_work_location(interaction, user)
     else:
         return handle_location_set(interaction, user)

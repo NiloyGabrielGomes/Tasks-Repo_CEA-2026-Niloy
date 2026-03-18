@@ -4,8 +4,6 @@ from typing import Any, Dict
 
 from src.handlers.auth import AuthenticatedUser
 from src.models import MealType, WorkLocationType, UserRole
-from src.config import settings
-from src.services.discord_follow_up import post_follow_up
 from src.services.override_service import override_service
 from src.services.meal_service import MEAL_DISPLAY, DEFAULT_MEAL_TYPES
 from src.services.location_service import LOCATION_DISPLAY
@@ -466,13 +464,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     )
 
     if dispatch_type == "command":
-        response = handle_override_update(interaction, user)
-        post_follow_up(
-            settings.DISCORD_APPLICATION_ID,
-            interaction["token"],
-            response["data"],
-        )
-        return {"statusCode": 200}
+        return handle_override_update(interaction, user)
     else:
         # Route to the correct component handler based on custom_id prefix
         custom_id = interaction.get("data", {}).get("custom_id", "")

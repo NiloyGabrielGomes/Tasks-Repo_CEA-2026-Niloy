@@ -100,7 +100,7 @@ def create_error_response(message: str) -> Dict[str, Any]:
 
 
 def _deferred_response() -> Dict[str, Any]:
-    return {"type": RESPONSE_DEFERRED_CHANNEL_MESSAGE}
+    return {"type": RESPONSE_DEFERRED_CHANNEL_MESSAGE, "data": {"flags": 64}}
 
 
 def _serialize_user(user: AuthenticatedUser) -> Dict[str, Any]:
@@ -174,8 +174,10 @@ def _dispatch_command(
         "interaction": interaction,
         "user": _serialize_user(user),
     }
-    dispatcher.dispatch(fn, payload, async_mode=True)
-    return _deferred_response()
+    result = dispatcher.dispatch(fn, payload, async_mode=False)
+    if result is None:
+        return create_error_response("Feature Lambda returned no response.")
+    return result
 
 
 def _dispatch_component(

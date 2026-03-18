@@ -5,8 +5,6 @@ from typing import Any, Dict
 
 from src.handlers.auth import AuthenticatedUser
 from src.models import MealType, UserRole
-from src.config import settings
-from src.services.discord_follow_up import post_follow_up
 from src.services.meal_service import meal_service, MEAL_DISPLAY
 from src.utils import parse_date_option, format_date_display, validate_date_for_update
 
@@ -259,12 +257,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     )
 
     if dispatch_type == "command":
-        response = handle_meal_update(interaction, user)
-        post_follow_up(
-            settings.DISCORD_APPLICATION_ID,
-            interaction["token"],
-            response["data"],
-        )
-        return {"statusCode": 200}
+        return handle_meal_update(interaction, user)
     else:
         return handle_meal_toggle(interaction, user)

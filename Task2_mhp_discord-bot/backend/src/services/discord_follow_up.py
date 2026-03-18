@@ -7,13 +7,17 @@ logger = logging.getLogger(__name__)
 
 
 def post_follow_up(application_id: str, interaction_token: str, data: dict) -> None:
-    url = f"https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}"
-    body = json.dumps(data).encode()
+    url = f"https://discord.com/api/v10/webhooks/{application_id}/{interaction_token}/messages/@original"
+    patch_data = {k: v for k, v in data.items() if k != "flags"}
+    body = json.dumps(patch_data).encode()
     req = urllib.request.Request(
         url,
         data=body,
-        method="POST",
-        headers={"Content-Type": "application/json"},
+        method="PATCH",
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "DiscordBot (https://discord.com/developers/docs, 1.0)",
+        },
     )
     try:
         urllib.request.urlopen(req, timeout=5)
