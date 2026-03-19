@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.6.0
-> **Last Updated:** 2026-03-18
-> **Status:** Issue #19 Complete — Multi-Lambda Architecture
-> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #19, #20, #21
+> **Version:** 1.7.0
+> **Last Updated:** 2026-03-19
+> **Status:** Issue #18 Complete — Multi-Channel Adapter Architecture
+> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #18, #19, #20, #21
 
 ---
 
@@ -11,19 +11,21 @@
 
 1. [Overview](#overview)
 2. [Architecture](#architecture)
-3. [Infrastructure](#infrastructure)
-4. [DynamoDB Schema](#dynamodb-schema)
+3. [Channel Adapter Architecture](#channel-adapter-architecture)
+4. [Infrastructure](#infrastructure)
+5. [DynamoDB Schema](#dynamodb-schema)
    - [Design Principles](#design-principles)
    - [Key Structure](#key-structure)
    - [Access Patterns](#access-patterns)
    - [Data Models](#data-models)
-5. [Discord Integration](#discord-integration)
-6. [Authentication & Authorization](#authentication--authorization)
-7. [Meal Participation](#meal-participation)
-8. [Work Location](#work-location)
-9. [Override Update](#override-update)
-10. [Security](#security)
-11. [Future Enhancements](#future-enhancements)
+6. [Discord Integration](#discord-integration)
+7. [Google Chat Integration](#google-chat-integration)
+8. [Authentication & Authorization](#authentication--authorization)
+9. [Meal Participation](#meal-participation)
+10. [Work Location](#work-location)
+11. [Override Update](#override-update)
+12. [Security](#security)
+13. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -51,29 +53,91 @@ This document covers the technical implementation of the Meal Headcount Planner 
 | API Gateway | AWS API Gateway |
 | Database | Amazon DynamoDB |
 | Storage | Amazon S3 |
-| Discord Integration | Discord HTTP Interactions (PyNaCl) |
+| Discord Integration | Discord HTTP Interactions (PyNaCl Ed25519) |
+| Google Chat Integration | Google Chat HTTP Interactions (google-auth JWT) |
 | Infrastructure | AWS SAM |
 
 ### High-Level Flow
 
 ```
-User → Discord → API Gateway → IngressFunction (ingress.py)
-                                    │
-                                    ├── PyNaCl Signature Verification
-                                    ├── Auth + Role-based Access Control
-                                    ├── PING → PONG (direct)
-                                    │
-                                    ├── ENABLE_MULTI_LAMBDA=false (default)
-                                    │     └── In-process routing → handler modules
-                                    │
-                                    └── ENABLE_MULTI_LAMBDA=true
-                                          ├── Slash command → deferred (type 5)
-                                          │     + async invoke → MealFunction /
-                                          │       LocationFunction / OverrideFunction
-                                          │         └── posts follow-up via Discord webhook
-                                          └── Component → sync invoke → feature Lambda
-                                                  └── result returned to Discord
+Discord → API Gateway (/discord) → IngressFunction (ingress.py)
+                                        ├── DiscordVerifier (Ed25519)
+                                        ├── DiscordUserResolver (role IDs → UserRole)
+                                        ├── DiscordIngressAdapter → NormalizedInteraction
+                                        ├── check_command_authorization
+                                        ├── PING → PONG (direct)
+                                        │
+                                        ├── ENABLE_MULTI_LAMBDA=false (default)
+                                        │     └── _route_inprocess → handler module
+                                        │           └── DiscordRenderer → embed/buttons
+                                        │
+                                        └── ENABLE_MULTI_LAMBDA=true
+                                              ├── Slash command → sync invoke → feature Lambda
+                                              │     └── returns full embed response
+                                              └── Component → sync invoke → feature Lambda
+                                                    └── returns UPDATE_MESSAGE response
+
+Google Chat → API Gateway (/google-chat) → GoogleChatIngressFunction (google_chat_ingress.py)
+                                                ├── ENABLE_GOOGLE_CHAT=false → 503
+                                                ├── GoogleChatVerifier (JWT)
+                                                ├── GoogleChatUserResolver (email → UserRole)
+                                                ├── GoogleChatIngressAdapter → NormalizedInteraction
+                                                └── Handler (same meal/location/override)
+                                                      └── GoogleChatRenderer → Cards v2
 ```
+
+---
+
+## Channel Adapter Architecture
+
+Issue #18 introduced a platform-agnostic adapter layer so the same business logic (`services/`, `storage/`) works for both Discord and Google Chat without duplication.
+
+### Adapter Interfaces (`src/adapters/base.py`)
+
+| Interface | Responsibility |
+|-----------|---------------|
+| `InteractionVerifier` | Platform-specific request authentication (`verify`, `extract_body`) |
+| `UserResolver` | Maps platform identity to `AuthenticatedUser` (`resolve`) |
+| `UIRenderer` | Produces platform-specific response payloads (`render_meal_status`, `render_location_status`, `render_override_status`, `render_error`, `render_update`) |
+
+### Normalized Interaction Bridge (`src/adapters/normalized.py`)
+
+```python
+@dataclass
+class NormalizedInteraction:
+    platform: str            # "discord" | "google_chat"
+    interaction_type: str    # "command" | "action"
+    command_name: Optional[str]
+    action_id: Optional[str] # colon-delimited string (same format on both platforms)
+    options: Dict[str, Any]  # parsed command options / button params
+    raw_body: Dict[str, Any]
+    user: Optional[AuthenticatedUser]
+```
+
+The `action_id` reuses the existing Discord colon-delimited format (`meal_toggle:u1:2026-03-20:lunch`). Google Chat encodes this same string in card action parameters. Handler parsing logic is unchanged across platforms.
+
+### Implementations
+
+| Module | Discord | Google Chat |
+|--------|---------|-------------|
+| Verifier | `src/adapters/discord/verifier.py` | `src/adapters/google_chat/verifier.py` |
+| User resolver | `src/adapters/discord/auth_adapter.py` | `src/adapters/google_chat/auth_adapter.py` |
+| Renderer | `src/adapters/discord/renderer.py` | `src/adapters/google_chat/renderer.py` |
+| Ingress adapter | `src/adapters/discord/ingress_adapter.py` | `src/adapters/google_chat/ingress_adapter.py` |
+
+### Handler Signatures (after refactor)
+
+All three feature handlers now take `(interaction: NormalizedInteraction, renderer: UIRenderer)`:
+
+```python
+# Before
+def handle_meal_update(interaction: Dict, user: AuthenticatedUser) -> Dict: ...
+
+# After
+def handle_meal_update(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+```
+
+`services/` and `storage/` are completely unchanged — only the boundary layers are platform-aware.
 
 ---
 
@@ -83,24 +147,26 @@ User → Discord → API Gateway → IngressFunction (ingress.py)
 
 All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure/template.yaml) using AWS SAM.
 
-#### Lambda Functions (Issue #19 — Multi-Lambda Architecture)
+#### Lambda Functions
 
 | Function | Name | Handler | IAM Scope |
 |----------|------|---------|-----------|
-| Ingress | `trainee-2026-niloy-mhp-ingress-{env}` | `src.handlers.ingress.lambda_handler` | Lambda invoke only |
+| Discord Ingress | `trainee-2026-niloy-mhp-ingress-{env}` | `src.handlers.ingress.lambda_handler` | Lambda invoke only |
 | Meal | `trainee-2026-niloy-mhp-meal-{env}` | `src.handlers.meal_handler.lambda_handler` | DynamoDB + S3 |
 | Location | `trainee-2026-niloy-mhp-location-{env}` | `src.handlers.location_handler.lambda_handler` | DynamoDB + S3 |
 | Override | `trainee-2026-niloy-mhp-override-{env}` | `src.handlers.override_handler.lambda_handler` | DynamoDB + S3 |
+| Google Chat Ingress | `trainee-2026-niloy-mhp-gchat-ingress-{env}` | `src.handlers.google_chat_ingress.lambda_handler` | DynamoDB + S3 |
 
 - **Runtime:** Python 3.12, **Timeout:** 30 s, **Memory:** 256 MB (all functions)
-- **Dispatch:** Controlled by `ENABLE_MULTI_LAMBDA` env var (default `false` — in-process fallback active)
-- **Legacy entry point:** `src.handlers.interaction.lambda_handler` retained for reference; not deployed
+- **Discord dispatch:** Controlled by `ENABLE_MULTI_LAMBDA` env var (default `false` — in-process fallback active)
+- **Google Chat:** Controlled by `ENABLE_GOOGLE_CHAT` env var (default `false` — returns 503 when disabled)
 
 #### API Gateway
 
-- **Path:** `/interactions`
-- **Method:** POST
-- **Integration:** Lambda Proxy
+| Gateway | Path | Method | Routes to |
+|---------|------|--------|-----------|
+| Discord API | `/discord` | POST | `IngressFunction` |
+| Google Chat API | `/google-chat` | POST | `GoogleChatFunction` |
 
 #### DynamoDB Table
 
@@ -155,6 +221,10 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 | `MEAL_FUNCTION_NAME` | ARN/name of MealFunction | (set by SAM) |
 | `LOCATION_FUNCTION_NAME` | ARN/name of LocationFunction | (set by SAM) |
 | `OVERRIDE_FUNCTION_NAME` | ARN/name of OverrideFunction | (set by SAM) |
+| `ENABLE_GOOGLE_CHAT` | Enable Google Chat integration | `false` |
+| `GOOGLE_CHAT_PROJECT_NUMBER` | GCP project number for JWT audience | `""` |
+| `GOOGLE_CHAT_ADMIN_EMAILS` | Comma-separated admin emails (fallback) | `""` |
+| `GOOGLE_CHAT_TEAM_LEAD_EMAILS` | Comma-separated TL emails (fallback) | `""` |
 
 #### Role Mapping Config
 
@@ -174,7 +244,7 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 - **User-first partitioning** — Records are partitioned by `USER#<userId>` so user-history queries (meal history, WFH monthly count) are efficient O(user's records) queries, not full table scans
 - **GSI1 for date-centric headcount** — Every meal and location record carries `GSI1PK=DATE#<date>` / `GSI1SK=MEAL#<userId>#<mealType>` (or `WORKLOC#<userId>`), enabling daily headcount queries without scanning
 - **GSI2 for identity/team listing** — User profiles, teams, and special days carry `GSI2PK` values (`USER`, `TEAM`, `SPECIALDAY#<YYYY-MM>`) for list queries and provider-neutral identity resolution
-- **Provider-neutral identity** — A separate `IDENT#<provider>#<externalId>` lookup item maps any external identity (Discord, future Google Chat) to the internal `user_id`, keeping multi-channel support open without UUID migration
+- **Provider-neutral identity** — A separate `IDENT#<provider>#<externalId>` lookup item maps any external identity (Discord, Google Chat, or future providers) to the internal `user_id`, enabling multi-channel support without schema changes
 - **Team stamped at write time** — Team name (from the user's Discord role) is written on every meal/location record. Team queries use GSI1 key condition + `FilterExpression` on `team`. Discord roles remain the source of truth; the stamp is refreshed on every update.
 
 ### Key Structure
@@ -219,7 +289,7 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 ```python
 class User:
-    discord_id: str        # Primary identifier (= userId)
+    user_id: str           # Platform-agnostic opaque ID (Discord snowflake, Google "users/..." etc.)
     name: str              # Display name
     email: Optional[str]   # Email
     role: UserRole         # employee, team_lead, admin
@@ -230,16 +300,16 @@ class User:
     gsi2_sk: Optional[str] # "<createdAt>#<userId>"  (set in storage layer)
 ```
 
-#### ExternalIdentity
+> **Note:** `user_id` was renamed from `discord_id` in Issue #18. DynamoDB items written before the rename are read with backward-compat fallback (`item.get("user_id") or item.get("discord_id", "")`).
+
+#### ExternalIdentity (lookup only)
 
 ```python
-class ExternalIdentity:
-    provider: str      # e.g. "discord", "google_chat"
-    external_id: str   # Provider-specific ID
-    user_id: str       # Internal user_id (= discord_id initially)
+# DynamoDB item: PK=IDENT#<provider>#<externalId>, SK=same
+# Fields: user_id (str)
 ```
 
-Written automatically by `put_user()`. Enables future multi-channel support (Google Chat, etc.) without changing the primary user record.
+Identity lookup items are written separately from `put_user()`. They enable multi-channel support (Discord, Google Chat, etc.) without changing the primary user record. Provider values: `discord`, `google_chat`.
 
 #### Team
 
@@ -256,7 +326,7 @@ class Team:
 
 ```python
 class MealParticipation:
-    user_id: str             # Discord user ID
+    user_id: str             # Platform-agnostic user identifier
     date: date               # Meal date
     meal_type: MealType      # lunch, snacks, iftar, etc.
     is_participating: bool   # True = opted in, False = opted out
@@ -272,7 +342,7 @@ class MealParticipation:
 
 ```python
 class WorkLocation:
-    user_id: str              # Discord user ID
+    user_id: str              # Platform-agnostic user identifier
     date: date                # Location date
     location: WorkLocationType # office, wfh
     team: Optional[str]       # Team name stamped from Discord role at write time
@@ -309,15 +379,16 @@ class Policy:
 ### How It Works
 
 1. **Slash Command** — User types `/meal-update` in Discord
-2. **Discord to Lambda** — Discord sends HTTP POST to API Gateway endpoint
-3. **Signature Verification** — PyNaCl verifies Ed25519 signature
-4. **Authentication** — Extract user identity and roles from interaction payload
-5. **Authorization** — Check if user has permission for the command
-6. **Process & Respond** — Lambda processes request and returns response
+2. **Discord to Lambda** — Discord sends HTTP POST to `POST /discord` API Gateway endpoint
+3. **Signature Verification** — `DiscordVerifier` (Ed25519/PyNaCl) verifies signature (`src/adapters/discord/verifier.py`)
+4. **Authentication** — `DiscordUserResolver` maps Discord role IDs to `AuthenticatedUser` (`src/adapters/discord/auth_adapter.py`)
+5. **Normalization** — `DiscordIngressAdapter.normalize()` builds `NormalizedInteraction` (`src/adapters/discord/ingress_adapter.py`)
+6. **Authorization** — `check_command_authorization()` enforces role requirements
+7. **Process & Respond** — Handler returns response via `DiscordRenderer` (`src/adapters/discord/renderer.py`)
 
 ### Signature Verification
 
-The Lambda handler verifies every request using PyNaCl:
+The `DiscordVerifier` in `src/adapters/discord/verifier.py` verifies every request using PyNaCl:
 
 ```python
 from nacl.signing import VerifyKey
@@ -339,6 +410,78 @@ verify_key.verify(message, bytes.fromhex(signature), encoder=RawEncoder)
 
 ---
 
+## Google Chat Integration
+
+> **Feature-flagged:** `ENABLE_GOOGLE_CHAT=false` by default. The Lambda returns HTTP 503 until explicitly enabled.
+
+### How It Works
+
+1. **Slash Command or Button** — User types `/meal-update` or clicks a card button in Google Chat
+2. **Google Chat to Lambda** — Google Chat sends HTTP POST to `POST /google-chat` API Gateway endpoint
+3. **JWT Verification** — `GoogleChatVerifier` validates the `Authorization: Bearer <token>` header using `google.oauth2.id_token.verify_oauth2_token()` with `GOOGLE_CHAT_PROJECT_NUMBER` as audience (`src/adapters/google_chat/verifier.py`)
+4. **Authentication** — `GoogleChatUserResolver` maps user email to `AuthenticatedUser` via DynamoDB policy `POLICY#google_chat_role_map`, falling back to `GOOGLE_CHAT_ADMIN_EMAILS` / `GOOGLE_CHAT_TEAM_LEAD_EMAILS` env vars (`src/adapters/google_chat/auth_adapter.py`)
+5. **Normalization** — `GoogleChatIngressAdapter.normalize()` builds `NormalizedInteraction` (`src/adapters/google_chat/ingress_adapter.py`)
+6. **Authorization** — Same `check_command_authorization()` as Discord path
+7. **Process & Respond** — Handler returns response via `GoogleChatRenderer` which builds Cards v2 JSON (`src/adapters/google_chat/renderer.py`)
+
+### Supported Event Types
+
+| Google Chat Event | Maps to | Example |
+|-------------------|---------|---------|
+| `MESSAGE` (slash) | `interaction_type="command"` | `/meal-update date:2026-03-20` |
+| `CARD_CLICKED` | `interaction_type="action"` | Button click with `action_id` parameter |
+
+### Slash Command Format
+
+Commands follow the pattern `/command-name key:value key2:value2`:
+
+```
+/meal-update date:2026-03-20
+/work-location date:2026-03-20
+/override-update employee:users/alice123 date:2026-03-20
+```
+
+### Role Mapping
+
+| Source | Priority |
+|--------|----------|
+| DynamoDB `POLICY#google_chat_role_map` (JSON: `{"email": "admin"}`) | High |
+| `GOOGLE_CHAT_ADMIN_EMAILS` env var (comma-separated) | Fallback |
+| `GOOGLE_CHAT_TEAM_LEAD_EMAILS` env var (comma-separated) | Fallback |
+| Default | `employee` |
+
+### Response Format (Cards v2)
+
+```json
+{
+  "cardsV2": [{
+    "cardId": "meal_status",
+    "card": {
+      "header": { "title": "🍽️ Meal Participation", "subtitle": "Thursday, March 20, 2026" },
+      "sections": [
+        { "widgets": [{ "decoratedText": { "text": "🍱 Lunch", "bottomLabel": "✅ Opted In" } }] },
+        { "widgets": [{ "buttonList": { "buttons": [
+          { "text": "🍱 Lunch ✅", "color": {"red": 0.341, "green": 0.694, "blue": 0.278, "alpha": 1},
+            "onClick": { "action": { "function": "meal_toggle",
+              "parameters": [{"key": "action_id", "value": "meal_toggle:users/alice:2026-03-20:lunch"}] }}}
+        ]}}]}
+      ]
+    }
+  }]
+}
+```
+
+- **Updates** (`CARD_CLICKED`) include `"actionResponse": {"type": "UPDATE_MESSAGE"}`
+- **Errors** include `"actionResponse": {"type": "EPHEMERAL"}`
+
+### Setup (when credentials available)
+
+1. Deploy with `ENABLE_GOOGLE_CHAT=true` and `GOOGLE_CHAT_PROJECT_NUMBER=<project>`
+2. Register the `GoogleChatApiEndpoint` output URL as the bot's webhook in Google Cloud Console
+3. Optionally seed `POLICY#google_chat_role_map` in DynamoDB with admin/TL email mappings
+
+---
+
 ## Authentication & Authorization
 
 ### Overview
@@ -355,11 +498,11 @@ The bot uses Discord as the identity provider. Every interaction includes user i
 3. PyNaCl verifies signature
          ↓
 4. Extract user from interaction payload:
-   - discord_id
+   - user_id (Discord user ID)
    - username
-   - global_name
-   - guild_id
-   - roles (list of role IDs)
+   - display_name
+   - space_id (guild ID)
+   - platform_roles (list of role IDs)
          ↓
 5. Map Discord roles to application role
          ↓
@@ -368,16 +511,19 @@ The bot uses Discord as the identity provider. Every interaction includes user i
 
 ### User Extraction
 
+`AuthenticatedUser` is a platform-agnostic dataclass (renamed in Issue #18 from Discord-specific fields):
+
 ```python
 @dataclass
 class AuthenticatedUser:
-    discord_id: str           # User's Discord ID
-    username: str            # Discord username
-    global_name: Optional[str]  # Display name
-    role: UserRole          # Mapped application role
-    team: Optional[str]      # Derived from Discord roles
-    guild_id: str           # Server ID
-    discord_roles: list[str]  # Raw Discord role IDs
+    user_id: str              # Platform-agnostic opaque ID (Discord user ID or Google Chat user ID)
+    username: str             # Platform username
+    display_name: Optional[str]  # Display name (was global_name)
+    role: UserRole            # Mapped application role
+    team: Optional[str]       # Derived from platform roles
+    space_id: str             # Guild ID (Discord) or space name (Google Chat) (was guild_id)
+    platform_roles: list[str] # Raw platform role IDs (was discord_roles)
+    platform: str             # "discord" | "google_chat"
 ```
 
 ### Role Mapping
@@ -389,6 +535,8 @@ Discord server roles are mapped to application roles:
 | MHP-Admin (role ID) | `admin` | 2 (highest) |
 | MHP-TeamLead (role ID) | `team_lead` | 1 |
 | (no special role) | `employee` | 0 (lowest) |
+
+For Google Chat, role mapping uses the `POLICY#google_chat_role_map` DynamoDB item (same pattern as `team_role_map`), with fallback to `GOOGLE_CHAT_ADMIN_EMAILS` and `GOOGLE_CHAT_TEAM_LEAD_EMAILS` env vars.
 
 ### Authorization Implementation
 
@@ -538,12 +686,14 @@ After clicking a button, the original message is updated in place (type 7 — UP
 ### Button Custom ID Format
 
 ```
-meal_toggle:{discord_id}:{date}:{meal_type}
+meal_toggle:{user_id}:{date}:{meal_type}
 ```
 
 Example: `meal_toggle:111222333:2026-03-04:lunch`
 
-Security: The handler verifies the clicking user matches the `discord_id` in the custom ID. Users cannot toggle other users' buttons.
+Security: The handler verifies the clicking user matches the `user_id` in the custom ID. Users cannot toggle other users' buttons.
+
+> **Note:** The same colon-delimited `action_id` format is used across all platforms. For Google Chat, the `action_id` string is encoded in the card action `parameters` list under the key `action_id`.
 
 ---
 
@@ -781,7 +931,6 @@ Recommended secrets:
 - **Special Day Controls** (Issue #9) — Admin commands to mark dates as office-closed or government holidays; GSI2 monthly query already supported
 - **EventBridge Integration** — Scheduled daily summary generation
 - **Team-based Queries** — Team name stamped on records at write time; team queries use GSI1 key condition + `FilterExpression` on `team`. TL's team derived from interaction payload roles (zero extra API calls).
-- **Multi-channel Identity** — `IDENT#<provider>#<externalId>` lookup pattern is in place; adding Google Chat support only requires a new provider value, no schema changes
 - **Web Dashboard** — Separate web interface for admins (Task 3)
 - **Discord Announcements** — Auto-post summaries to channels
 - **OAuth2 Flow** — For web dashboard authentication and Discord and Lambda request processing
