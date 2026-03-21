@@ -10,7 +10,73 @@ from src.utils import format_date_display
 
 class GoogleChatRenderer(UIRenderer):
 
-   
+    # ── Meal ─────────────────────────────────────────────────────────────────
+
+    def render_meal_status(
+        self,
+        user_id: str,
+        target_date: date,
+        meals: Dict[MealType, Optional[MealParticipation]],
+        confirmation: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        lines = [f"🍽️ *Meal Participation — {format_date_display(target_date)}*"]
+        if confirmation:
+            lines.append(confirmation)
+        for meal_type, record in meals.items():
+            display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+            is_in = record.is_participating if record is not None else True
+            lines.append(f"{display['emoji']} {display['label']}: {'✅ Opted In' if is_in else '❌ Opted Out'}")
+        return _render_text("\n".join(lines))
+
+    # ── Location ─────────────────────────────────────────────────────────────
+
+    def render_location_status(
+        self,
+        user_id: str,
+        target_date: date,
+        current: WorkLocationType,
+        confirmation: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        widgets = []
+        if confirmation:
+            widgets.append({"textParagraph": {"text": confirmation}})
+
+        display = LOCATION_DISPLAY.get(current, {"label": current.value, "emoji": "📍"})
+        widgets.append({
+            "decoratedText": {
+                "text": f"{display['emoji']} Current Location",
+                "bottomLabel": display["label"],
+            }
+        })
+
+        buttons = []
+        for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
+            loc_display = LOCATION_DISPLAY.get(loc_type, {"label": loc_type.value, "emoji": "📍"})
+            is_active = loc_type == current
+            action_id = f"location_set:{user_id}:{target_date.isoformat()}:{loc_type.value}"
+            buttons.append({
+                "text": f"{loc_display['emoji']} {loc_display['label']} {'✅' if is_active else ''}",
+                "color": _green() if is_active else _grey(),
+                "disabled": is_active,
+                "onClick": {
+                    "action": {
+                        "function": "location_set",
+                        "parameters": [{"key": "action_id", "value": action_id}],
+                    }
+                },
+            })
+
+        return _wrap_card(
+            card_id="location_status",
+            title="📍 Work Location",
+            subtitle=format_date_display(target_date),
+            sections=[
+                {"widgets": widgets},
+                {"widgets": [{"buttonList": {"buttons": buttons}}]},
+            ],
+        )
+
+    
 
     # ── Utilities ─────────────────────────────────────────────────────────────
 
