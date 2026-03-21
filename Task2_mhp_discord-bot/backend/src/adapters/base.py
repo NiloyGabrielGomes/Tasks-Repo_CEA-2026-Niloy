@@ -54,3 +54,31 @@ class UIRenderer(ABC):
     ) -> Dict[str, Any]:
         """Return a response payload showing work location."""
 
+    # ── Override ─────────────────────────────────────────────────────────────
+
+    @abstractmethod
+    def render_override_status(
+        self,
+        target_user_id: str,
+        target_username: str,
+        actor_id: str,
+        target_date: date,
+        current_state: Dict[str, Any],
+        confirmation: Optional[str] = None,
+        target_team: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return a response payload for the override view."""
+
+    # ── Utilities ─────────────────────────────────────────────────────────────
+
+    @abstractmethod
+    def render_success(self, message: str) -> Dict[str, Any]:
+        """Return a success confirmation (ephemeral/private where supported)."""
+
+    @abstractmethod
+    def render_error(self, message: str) -> Dict[str, Any]:
+        """Return an error response (ephemeral/private where supported)."""
+
+    @abstractmethod
+    def render_update(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a 'new message' payload into an 'update existing message' payload."""
