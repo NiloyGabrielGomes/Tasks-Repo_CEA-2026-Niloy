@@ -95,7 +95,7 @@ def validate_date_for_update(target_date: date) -> tuple[bool, str | None]:
 
 def parse_date_option(date_str: str | None) -> date:
     if not date_str:
-        return get_dhaka_today()
+        return get_dhaka_today() + timedelta(days=1)
 
     try:
         return date.fromisoformat(date_str)

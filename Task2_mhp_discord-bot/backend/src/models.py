@@ -24,7 +24,7 @@ class DayType(str, Enum):
 # ── User ──────────────────────────────────────────────────────────────────────
 
 class User(BaseModel):
-    discord_id: str
+    user_id: str  # platform-agnostic opaque ID (Discord snowflake, Google Chat "users/..." etc.)
     name: str
     email: Optional[str] = None
     role: UserRole = UserRole.EMPLOYEE
@@ -55,12 +55,12 @@ class Team(BaseModel):
 # ── Meal Participation ────────────────────────────────────────────────────────
 
 class MealParticipation(BaseModel):
-    user_id: str  # discord_id
+    user_id: str  # platform-agnostic user identifier
     meal_type: MealType
     date: date
     is_participating: bool = True
-    team: Optional[str] = None  # stamped from Discord role at write time
-    updated_by: Optional[str] = None  # discord_id of actor
+    team: Optional[str] = None  # stamped from role at write time
+    updated_by: Optional[str] = None  # user_id of actor
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     reason: Optional[str] = None
     gsi1_pk: Optional[str] = None  # "DATE#<YYYY-MM-DD>"
@@ -69,10 +69,10 @@ class MealParticipation(BaseModel):
 # ── Work Location ─────────────────────────────────────────────────────────────
 
 class WorkLocation(BaseModel):
-    user_id: str  # discord_id
+    user_id: str  # platform-agnostic user identifier
     date: date
     location: WorkLocationType = WorkLocationType.OFFICE
-    team: Optional[str] = None  # stamped from Discord role at write time
+    team: Optional[str] = None  # stamped from role at write time
     updated_by: Optional[str] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     gsi1_pk: Optional[str] = None  # "DATE#<YYYY-MM-DD>"

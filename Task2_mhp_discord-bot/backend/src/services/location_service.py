@@ -3,9 +3,10 @@ import logging
 from datetime import date, datetime
 
 from src.config import settings
-from src.models import WorkLocation, WorkLocationType
+from src.models import MealParticipation, WorkLocation, WorkLocationType
 from src.storage.dynamodb import DynamoDBStorage, storage as default_storage
 from src.utils import validate_date_for_update, DHAKA_UTC_OFFSET
+from src.services.meal_service import DEFAULT_MEAL_TYPES
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,22 @@ class LocationService:
         )
 
         self.storage.put_location(record)
+
+        if location == WorkLocationType.WFH:
+            for meal_type in DEFAULT_MEAL_TYPES:
+                self.storage.put_meal(MealParticipation(
+                    user_id=discord_id,
+                    meal_type=meal_type,
+                    date=target_date,
+                    is_participating=False,
+                    team=team,
+                    updated_by=updated_by or discord_id,
+                    updated_at=now,
+                ))
+            logger.info(
+                "WFH set: auto opted-out of all meals for user=%s, date=%s",
+                discord_id, target_date,
+            )
 
         logger.info(
             "Location set: user=%s, date=%s, location=%s",
