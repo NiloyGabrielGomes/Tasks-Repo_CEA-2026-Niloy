@@ -27,6 +27,66 @@ OVERRIDE_EMBED_COLOR = 0xED4245  # Red — distinct from self-service
 
 
 
+def _build_location_buttons(
+    user_id: str,
+    target_date: date,
+    current: WorkLocationType,
+) -> list[Dict[str, Any]]:
+    buttons = []
+    for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
+        display = LOCATION_DISPLAY.get(loc_type, {"label": loc_type.value, "emoji": "📍"})
+        custom_id = f"location_set:{user_id}:{target_date.isoformat()}:{loc_type.value}"
+        is_active = loc_type == current
+        style = BUTTON_SUCCESS if is_active else BUTTON_SECONDARY
+        label = f"{display['emoji']} {display['label']} {'✅' if is_active else ''}"
+        buttons.append({
+            "type": BUTTON, "style": style, "label": label,
+            "custom_id": custom_id, "disabled": is_active,
+        })
+    return [{"type": ACTION_ROW, "components": buttons}]
+
+
+def _build_override_embed(
+    target_user_id: str,
+    target_username: str,
+    target_date: date,
+    current_state: dict,
+    confirmation: Optional[str] = None,
+) -> Dict[str, Any]:
+    fields = []
+    for meal_type in DEFAULT_MEAL_TYPES:
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        is_in = current_state["meals"].get(meal_type, True)
+        status_emoji = "✅" if is_in else "❌"
+        fields.append({
+            "name": f"{display['emoji']} {display['label']}",
+            "value": f"{status_emoji} {'Opted In' if is_in else 'Opted Out'}",
+            "inline": True,
+        })
+
+    loc = current_state["location"]
+    loc_display = LOCATION_DISPLAY.get(loc, {"label": loc.value, "emoji": "📍"})
+    fields.append({
+        "name": f"{loc_display['emoji']} Work Location",
+        "value": f"**{loc_display['label']}**",
+        "inline": True,
+    })
+
+    parts = [
+        f"👤 **Employee:** <@{target_user_id}> ({target_username})",
+        f"📅 **Date:** {format_date_display(target_date)}",
+    ]
+    if confirmation:
+        parts += ["", confirmation]
+    parts += ["", "Use the buttons below to update this employee's records."]
+
+    return {
+        "title": "🔧 Override Update",
+        "description": "\n".join(parts),
+        "fields": fields,
+        "color": OVERRIDE_EMBED_COLOR,
+        "footer": {"text": "Overrides are recorded for audit purposes"},
+    }
 
 
 def _build_override_buttons(
