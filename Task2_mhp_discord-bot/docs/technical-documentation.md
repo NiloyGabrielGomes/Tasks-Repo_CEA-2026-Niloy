@@ -150,24 +150,28 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 #### Lambda Functions
 
-| Function | Name | Handler | IAM Scope |
-|----------|------|---------|-----------|
-| Discord Ingress | `trainee-2026-niloy-mhp-ingress-{env}` | `src.handlers.ingress.lambda_handler` | Lambda invoke only |
-| Meal | `trainee-2026-niloy-mhp-meal-{env}` | `src.handlers.meal_handler.lambda_handler` | DynamoDB + S3 |
-| Location | `trainee-2026-niloy-mhp-location-{env}` | `src.handlers.location_handler.lambda_handler` | DynamoDB + S3 |
-| Override | `trainee-2026-niloy-mhp-override-{env}` | `src.handlers.override_handler.lambda_handler` | DynamoDB + S3 |
-| Google Chat Ingress | `trainee-2026-niloy-mhp-gchat-ingress-{env}` | `src.handlers.google_chat_ingress.lambda_handler` | DynamoDB + S3 |
+| Function | Name | Handler | IAM Scope | Build |
+|----------|------|---------|-----------|-------|
+| Discord Ingress | `trainee-2026-niloy-mhp-ingress` | `src.handlers.ingress.lambda_handler` | Lambda invoke only | Makefile (`cp -r src`) |
+| Meal | `trainee-2026-niloy-mhp-meal` | `src.handlers.meal_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Location | `trainee-2026-niloy-mhp-location` | `src.handlers.location_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Override | `trainee-2026-niloy-mhp-override` | `src.handlers.override_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Headcount | `trainee-2026-niloy-mhp-headcount` | `src.handlers.headcount_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Google Chat Ingress | `trainee-2026-niloy-mhp-gchat-ingress` | `src.handlers.google_chat_ingress.lambda_handler` | DynamoDB + S3 | Makefile (`cp -r src`) |
 
 - **Runtime:** Python 3.12, **Timeout:** 30 s, **Memory:** 256 MB (all functions)
-- **Discord dispatch:** Controlled by `ENABLE_MULTI_LAMBDA` env var (default `false` — in-process fallback active)
+- **Shared Lambda Layer:** `trainee-2026-niloy-mhp-deps` — all pip packages bundled once; functions copy only Python source via Makefile targets
+- **Discord dispatch:** Controlled by `ENABLE_MULTI_LAMBDA` env var (`true` = route to feature Lambdas; `false` = in-process fallback)
 - **Google Chat:** Controlled by `ENABLE_GOOGLE_CHAT` env var (default `false` — returns 503 when disabled)
 
 #### API Gateway
 
-| Gateway | Path | Method | Routes to |
-|---------|------|--------|-----------|
-| Discord API | `/discord` | POST | `IngressFunction` |
-| Google Chat API | `/google-chat` | POST | `GoogleChatFunction` |
+Single HTTP API (`trainee-2026-niloy-mhp-api`, API Gateway v2):
+
+| Path | Method | Routes to |
+|------|--------|-----------|
+| `/discord` | POST | `InteractionFunction` (Discord Ingress) |
+| `/google-chat` | POST | `GoogleChatFunction` (Google Chat Ingress) |
 
 #### DynamoDB Table
 
