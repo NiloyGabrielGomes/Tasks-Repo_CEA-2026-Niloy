@@ -26,6 +26,171 @@ BUTTON_DANGER = 4     # Red
 OVERRIDE_EMBED_COLOR = 0xED4245  # Red — distinct from self-service
 
 
+class DiscordRenderer(UIRenderer):
+    """Produces Discord-flavoured JSON responses (embeds + action rows)."""
+
+    # ── Meal ─────────────────────────────────────────────────────────────────
+
+    def render_meal_status(
+        self,
+        user_id: str,
+        target_date: date,
+        meals: Dict[MealType, Optional[MealParticipation]],
+        confirmation: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        embed = _build_meal_embed(user_id, target_date, meals, confirmation)
+        components = _build_meal_buttons(user_id, target_date, meals)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+                "flags": EPHEMERAL_FLAG,
+            },
+        }
+
+    # ── Location ─────────────────────────────────────────────────────────────
+
+    def render_location_status(
+        self,
+        user_id: str,
+        target_date: date,
+        current: WorkLocationType,
+        confirmation: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        embed = _build_location_embed(user_id, target_date, current, confirmation)
+        components = _build_location_buttons(user_id, target_date, current)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+                "flags": EPHEMERAL_FLAG,
+            },
+        }
+
+    # ── Override ─────────────────────────────────────────────────────────────
+
+    def render_override_status(
+        self,
+        target_user_id: str,
+        target_username: str,
+        actor_id: str,
+        target_date: date,
+        current_state: Dict[str, Any],
+        confirmation: Optional[str] = None,
+        target_team: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        embed = _build_override_embed(
+            target_user_id, target_username, target_date, current_state, confirmation
+        )
+        components = _build_override_buttons(actor_id, target_user_id, target_date, current_state, target_team)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {
+                "embeds": [embed],
+                "components": components,
+                "flags": EPHEMERAL_FLAG,
+            },
+        }
+
+    # ── Utilities ─────────────────────────────────────────────────────────────
+
+    def render_success(self, message: str) -> Dict[str, Any]:
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"content": f"✅ {message}", "flags": EPHEMERAL_FLAG},
+        }
+
+    def render_error(self, message: str) -> Dict[str, Any]:
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"content": f"❌ {message}", "flags": EPHEMERAL_FLAG},
+        }
+
+    def render_update(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert a new-message payload (type 4) to an in-place update (type 7)."""
+        data = dict(payload.get("data", {}))
+        data.pop("flags", None)  # ephemeral flag is not valid on UPDATE_MESSAGE
+        return {"type": RESPONSE_UPDATE_MESSAGE, "data": data}
+
+
+# ── Private builders ─────────────────────────────────────────────────────────
+
+def _build_meal_embed(
+    user_id: str,
+    target_date: date,
+    meals: Dict[MealType, Optional[MealParticipation]],
+    confirmation: Optional[str] = None,
+) -> Dict[str, Any]:
+    fields = []
+    for meal_type, record in meals.items():
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        is_in = record.is_participating if record is not None else True
+        status_emoji = "✅" if is_in else "❌"
+        status_text = "Opted In" if is_in else "Opted Out"
+        fields.append({
+            "name": f"{display['emoji']} {display['label']}",
+            "value": f"{status_emoji} {status_text}",
+            "inline": True,
+        })
+
+    date_line = f"📅 **{format_date_display(target_date)}**"
+    if confirmation:
+        description = f"{date_line}\n\n{confirmation}\n\nClick a button below to toggle your participation for each meal."
+    else:
+        description = f"{date_line}\n\nClick a button below to toggle your participation for each meal."
+
+    return {
+        "title": "🍽️ Meal Participation",
+        "description": description,
+        "fields": fields,
+        "color": 0x5865F2,  # Discord blurple
+        "footer": {"text": "Default: Opted In for all meals • Toggle to change"},
+    }
+
+
+def _build_meal_buttons(
+    user_id: str,
+    target_date: date,
+    meals: Dict[MealType, Optional[MealParticipation]],
+) -> list[Dict[str, Any]]:
+    buttons = []
+    for meal_type, record in meals.items():
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        is_in = record.is_participating if record is not None else True
+        custom_id = f"meal_toggle:{user_id}:{target_date.isoformat()}:{meal_type.value}"
+        style = BUTTON_SUCCESS if is_in else BUTTON_DANGER
+        label = f"{display['emoji']} {display['label']} {'✅' if is_in else '❌'}"
+        buttons.append({"type": BUTTON, "style": style, "label": label, "custom_id": custom_id})
+
+    rows = []
+    for i in range(0, len(buttons), 5):
+        rows.append({"type": ACTION_ROW, "components": buttons[i:i + 5]})
+    return rows
+
+
+def _build_location_embed(
+    user_id: str,
+    target_date: date,
+    current: WorkLocationType,
+    confirmation: Optional[str] = None,
+) -> Dict[str, Any]:
+    display = LOCATION_DISPLAY.get(current, {"label": current.value, "emoji": "📍"})
+    status_line = f"{display['emoji']} **{display['label']}**"
+
+    parts = [f"📅 **{format_date_display(target_date)}**", ""]
+    if confirmation:
+        parts += [confirmation, ""]
+    parts += [f"Current location: {status_line}", "", "Click a button below to change your work location."]
+
+    return {
+        "title": "📍 Work Location",
+        "description": "\n".join(parts),
+        "color": 0x57F287 if current == WorkLocationType.OFFICE else 0xFEE75C,
+        "footer": {"text": "Default: Office • WFH days count toward monthly cap"},
+    }
+
 
 def _build_location_buttons(
     user_id: str,
