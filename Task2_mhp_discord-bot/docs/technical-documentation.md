@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.7.0
-> **Last Updated:** 2026-03-19
-> **Status:** Issue #18 Complete — Multi-Channel Adapter Architecture
-> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #18, #19, #20, #21
+> **Version:** 1.8.0
+> **Last Updated:** 2026-03-21
+> **Status:** Issue #6 Complete — Headcount View & Reporting
+> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #6, #18, #19, #20, #21
 
 ---
 
@@ -24,8 +24,9 @@
 9. [Meal Participation](#meal-participation)
 10. [Work Location](#work-location)
 11. [Override Update](#override-update)
-12. [Security](#security)
-13. [Future Enhancements](#future-enhancements)
+12. [Headcount View & Reporting](#headcount-view--reporting)
+13. [Security](#security)
+14. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -98,7 +99,7 @@ Issue #18 introduced a platform-agnostic adapter layer so the same business logi
 |-----------|---------------|
 | `InteractionVerifier` | Platform-specific request authentication (`verify`, `extract_body`) |
 | `UserResolver` | Maps platform identity to `AuthenticatedUser` (`resolve`) |
-| `UIRenderer` | Produces platform-specific response payloads (`render_meal_status`, `render_location_status`, `render_override_status`, `render_error`, `render_update`) |
+| `UIRenderer` | Produces platform-specific response payloads (`render_meal_status`, `render_location_status`, `render_override_status`, `render_team_summary`, `render_headcount_summary`, `render_error`, `render_update`) |
 
 ### Normalized Interaction Bridge (`src/adapters/normalized.py`)
 
@@ -149,24 +150,28 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 
 #### Lambda Functions
 
-| Function | Name | Handler | IAM Scope |
-|----------|------|---------|-----------|
-| Discord Ingress | `trainee-2026-niloy-mhp-ingress-{env}` | `src.handlers.ingress.lambda_handler` | Lambda invoke only |
-| Meal | `trainee-2026-niloy-mhp-meal-{env}` | `src.handlers.meal_handler.lambda_handler` | DynamoDB + S3 |
-| Location | `trainee-2026-niloy-mhp-location-{env}` | `src.handlers.location_handler.lambda_handler` | DynamoDB + S3 |
-| Override | `trainee-2026-niloy-mhp-override-{env}` | `src.handlers.override_handler.lambda_handler` | DynamoDB + S3 |
-| Google Chat Ingress | `trainee-2026-niloy-mhp-gchat-ingress-{env}` | `src.handlers.google_chat_ingress.lambda_handler` | DynamoDB + S3 |
+| Function | Name | Handler | IAM Scope | Build |
+|----------|------|---------|-----------|-------|
+| Discord Ingress | `trainee-2026-niloy-mhp-ingress` | `src.handlers.ingress.lambda_handler` | Lambda invoke only | Makefile (`cp -r src`) |
+| Meal | `trainee-2026-niloy-mhp-meal` | `src.handlers.meal_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Location | `trainee-2026-niloy-mhp-location` | `src.handlers.location_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Override | `trainee-2026-niloy-mhp-override` | `src.handlers.override_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Headcount | `trainee-2026-niloy-mhp-headcount` | `src.handlers.headcount_handler.lambda_handler` | DynamoDB + S3 | Makefile (selective copy) |
+| Google Chat Ingress | `trainee-2026-niloy-mhp-gchat-ingress` | `src.handlers.google_chat_ingress.lambda_handler` | DynamoDB + S3 | Makefile (`cp -r src`) |
 
 - **Runtime:** Python 3.12, **Timeout:** 30 s, **Memory:** 256 MB (all functions)
-- **Discord dispatch:** Controlled by `ENABLE_MULTI_LAMBDA` env var (default `false` — in-process fallback active)
+- **Shared Lambda Layer:** `trainee-2026-niloy-mhp-deps` — all pip packages bundled once; functions copy only Python source via Makefile targets
+- **Discord dispatch:** Controlled by `ENABLE_MULTI_LAMBDA` env var (`true` = route to feature Lambdas; `false` = in-process fallback)
 - **Google Chat:** Controlled by `ENABLE_GOOGLE_CHAT` env var (default `false` — returns 503 when disabled)
 
 #### API Gateway
 
-| Gateway | Path | Method | Routes to |
-|---------|------|--------|-----------|
-| Discord API | `/discord` | POST | `IngressFunction` |
-| Google Chat API | `/google-chat` | POST | `GoogleChatFunction` |
+Single HTTP API (`trainee-2026-niloy-mhp-api`, API Gateway v2):
+
+| Path | Method | Routes to |
+|------|--------|-----------|
+| `/discord` | POST | `InteractionFunction` (Discord Ingress) |
+| `/google-chat` | POST | `GoogleChatFunction` (Google Chat Ingress) |
 
 #### DynamoDB Table
 
@@ -217,14 +222,14 @@ All infrastructure is defined in [`infrastructure/template.yaml`](infrastructure
 | `FORWARD_PLANNING_DAYS` | Max days ahead to book | `7` |
 | `TIMEZONE` | timezone | `Asia/Dhaka` |
 | `DEBUG` | Enable debug mode | `false` |
-| `ENABLE_MULTI_LAMBDA` | Route commands to feature Lambdas | `false` |
-| `MEAL_FUNCTION_NAME` | ARN/name of MealFunction | (set by SAM) |
-| `LOCATION_FUNCTION_NAME` | ARN/name of LocationFunction | (set by SAM) |
-| `OVERRIDE_FUNCTION_NAME` | ARN/name of OverrideFunction | (set by SAM) |
+| `ENABLE_MULTI_LAMBDA` | Route commands to feature Lambdas | `true` |
+| `MEAL_FUNCTION_NAME` | Name of MealFunction | `trainee-2026-niloy-mhp-meal` |
+| `LOCATION_FUNCTION_NAME` | Name of LocationFunction | `trainee-2026-niloy-mhp-location` |
+| `OVERRIDE_FUNCTION_NAME` | Name of OverrideFunction | `trainee-2026-niloy-mhp-override` |
+| `HEADCOUNT_FUNCTION_NAME` | Name of HeadcountFunction | `trainee-2026-niloy-mhp-headcount` |
 | `ENABLE_GOOGLE_CHAT` | Enable Google Chat integration | `false` |
-| `GOOGLE_CHAT_PROJECT_NUMBER` | GCP project number for JWT audience | `""` |
-| `GOOGLE_CHAT_ADMIN_EMAILS` | Comma-separated admin emails (fallback) | `""` |
-| `GOOGLE_CHAT_TEAM_LEAD_EMAILS` | Comma-separated TL emails (fallback) | `""` |
+| `GOOGLE_CHAT_AUDIENCE` | JWT audience for Google Chat verification (API Gateway URL) | `""` |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT_JSON` | Base64-encoded GCP service account JSON (GoogleChatFunction only) | `""` |
 
 #### Role Mapping Config
 
@@ -882,6 +887,120 @@ override_loc:{actor_id}:{target_id}:{date}:{location_type}
 
 ---
 
+## Headcount View & Reporting
+
+### Overview
+
+Admins and Team Leads can view meal and location aggregates for any date via two read-only slash commands. Both commands default to today (Asia/Dhaka) and support an optional `date` filter. No DynamoDB writes occur — these are query-only paths.
+
+### Commands
+
+#### `/team-summary`
+
+```
+/team-summary [date:YYYY-MM-DD] [team:string]
+```
+
+- **date** (optional) — Target date. Defaults to today (Asia/Dhaka).
+- **team** (optional) — Team name filter. Defaults to the caller's own team.
+- **Access** — Team Lead and Admin (`UserRole.TEAM_LEAD`+).
+
+Shows meal counts per type (opted-in / opted-out) and location split (office / wfh) for a single team.
+
+#### `/headcount-summary`
+
+```
+/headcount-summary [date:YYYY-MM-DD] [team:string]
+```
+
+- **date** (optional) — Target date. Defaults to today (Asia/Dhaka).
+- **team** (optional) — Filter to a specific team. If omitted, shows all teams with a per-team breakdown.
+- **Access** — Admin only (`UserRole.ADMIN`).
+
+Shows the same aggregates as `/team-summary` but across all teams, with a per-team breakdown section.
+
+### HeadcountService (`src/services/headcount_service.py`)
+
+```python
+class HeadcountService:
+    def get_team_summary(self, target_date: date, team_name: str) -> Dict[str, Any]:
+        # Queries GSI1 for meals + locations filtered by team_name
+        # Returns: { meal_counts: {MealType: {opted_in, opted_out}}, location_counts: {office, wfh}, total_responding }
+
+    def get_headcount_summary(self, target_date: date, team_filter: Optional[str] = None) -> Dict[str, Any]:
+        # Queries GSI1 for all meals + locations, builds per-team breakdown
+        # Returns: { meal_counts, location_counts, total_responding, teams: { team_name: { meal_counts, location_counts, total_responding } } }
+```
+
+**Aggregation logic:**
+- Meal counts are aggregated per `MealType` from `DEFAULT_MEAL_TYPES` (lunch, snacks, etc.)
+- A user with no record is counted as opted-in (default participation)
+- Location counts: office vs. wfh; users with no record counted as office (default)
+- `total_responding` = union of user IDs seen across meals + locations records
+
+### DynamoDB Access Patterns Used
+
+| Operation | Method |
+|-----------|--------|
+| All meals for a date | GSI1 Query: `GSI1PK=DATE#<date>`, `GSI1SK begins_with MEAL#` |
+| Team meals for a date | GSI1 Query + `FilterExpression team=<name>` |
+| All locations for a date | GSI1 Query: `GSI1PK=DATE#<date>`, `GSI1SK begins_with WORKLOC#` |
+| Team locations for a date | GSI1 Query + `FilterExpression team=<name>` |
+
+### Lambda
+
+`HeadcountFunction` (`trainee-2026-niloy-mhp-headcount`) uses `FeatureExecutionRole` (DynamoDB + S3). It is invoked synchronously by `InteractionFunction` when `ENABLE_MULTI_LAMBDA=true`. Handler entry point: `src.handlers.headcount_handler.lambda_handler`.
+
+### Handler (`src/handlers/headcount_handler.py`)
+
+```python
+def handle_team_summary(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+def handle_headcount_summary(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+```
+
+Both handlers resolve date from options (defaulting to `get_dhaka_today()`), call `HeadcountService`, and pass the result to `renderer.render_team_summary()` or `renderer.render_headcount_summary()`.
+
+### Discord Response Format
+
+Responses are ephemeral embeds (`flags: 64`):
+
+**`/team-summary`** — single embed with meal counts per type and location split:
+```
+🍽️ Team Summary — Alpha Team
+📅 Friday, March 21, 2026
+
+🍱 Lunch: ✅ 8 opted in • ❌ 2 opted out
+🍕 Snacks: ✅ 7 opted in • ❌ 3 opted out
+
+📍 Location: 🏢 7 office • 🏠 3 WFH
+👥 Total responding: 10
+```
+
+**`/headcount-summary`** — embed with overall counts + per-team breakdown fields (one field per team):
+```
+📊 Headcount Summary
+📅 Friday, March 21, 2026
+
+🍱 Lunch: ✅ 20 opted in • ❌ 5 opted out
+🍕 Snacks: ✅ 18 opted in • ❌ 7 opted out
+📍 Location: 🏢 18 office • 🏠 7 WFH
+👥 Total responding: 25
+
+🏷️ Alpha (10): 🍱 8/2 • 🍕 7/3 | 🏢 7 🏠 3
+🏷️ Beta (15): 🍱 12/3 • 🍕 11/4 | 🏢 11 🏠 4
+```
+
+### Google Chat Response Format
+
+**`/team-summary`** — card with `decoratedText` widgets (one per meal type + one for location):
+- Each meal widget: icon `STAR`, top label = meal name, text = `✅ N opted in • ❌ N opted out`
+- Location widget: icon `MAP_PIN`, text = `🏢 N office • 🏠 N WFH`
+- Footer widget: `👥 Total responding: N`
+
+**`/headcount-summary`** — multi-section card; overall counts in the first section, each team in its own section with a `header` showing the team name.
+
+---
+
 ## Security
 
 ### Signature Verification
@@ -927,7 +1046,6 @@ Recommended secrets:
 
 ### Planned Features
 
-- **Headcount Reporting** (Issue #6) — `/headcount-summary` and `/team-summary` commands; now unblocked by GSI1 date queries
 - **Special Day Controls** (Issue #9) — Admin commands to mark dates as office-closed or government holidays; GSI2 monthly query already supported
 - **EventBridge Integration** — Scheduled daily summary generation
 - **Team-based Queries** — Team name stamped on records at write time; team queries use GSI1 key condition + `FilterExpression` on `team`. TL's team derived from interaction payload roles (zero extra API calls).
