@@ -76,7 +76,103 @@ class GoogleChatRenderer(UIRenderer):
             ],
         )
 
-    
+    # ── Override ─────────────────────────────────────────────────────────────
+
+    def render_override_status(
+        self,
+        target_user_id: str,
+        target_username: str,
+        actor_id: str,
+        target_date: date,
+        current_state: Dict[str, Any],
+        confirmation: Optional[str] = None,
+        target_team: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        team_segment = target_team or ""
+
+        widgets = []
+        if confirmation:
+            widgets.append({"textParagraph": {"text": confirmation}})
+
+        widgets.append({
+            "decoratedText": {
+                "text": f"👤 Employee: {target_username}",
+                "bottomLabel": f"📅 {format_date_display(target_date)}",
+            }
+        })
+
+        for meal_type in DEFAULT_MEAL_TYPES:
+            display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+            is_in = current_state["meals"].get(meal_type, True)
+            widgets.append({
+                "decoratedText": {
+                    "text": f"{display['emoji']} {display['label']}",
+                    "bottomLabel": f"{'✅ Opted In' if is_in else '❌ Opted Out'}",
+                }
+            })
+
+        loc = current_state["location"]
+        loc_display = LOCATION_DISPLAY.get(loc, {"label": loc.value, "emoji": "📍"})
+        widgets.append({
+            "decoratedText": {
+                "text": f"{loc_display['emoji']} Work Location",
+                "bottomLabel": loc_display["label"],
+            }
+        })
+
+        # Meal buttons
+        meal_buttons = []
+        for meal_type in DEFAULT_MEAL_TYPES:
+            display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+            is_in = current_state["meals"].get(meal_type, True)
+            new_state = "out" if is_in else "in"
+            action_id = (
+                f"override_meal:{actor_id}:{target_user_id}:{target_date.isoformat()}"
+                f":{meal_type.value}:{new_state}:{team_segment}"
+            )
+            meal_buttons.append({
+                "text": f"{display['emoji']} {display['label']} {'✅' if is_in else '❌'}",
+                "color": _green() if is_in else _red(),
+                "onClick": {
+                    "action": {
+                        "function": "override_meal",
+                        "parameters": [{"key": "action_id", "value": action_id}],
+                    }
+                },
+            })
+
+        # Location buttons
+        loc_buttons = []
+        current_loc = current_state["location"]
+        for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
+            ld = LOCATION_DISPLAY.get(loc_type, {"label": loc_type.value, "emoji": "📍"})
+            is_active = loc_type == current_loc
+            action_id = (
+                f"override_loc:{actor_id}:{target_user_id}:{target_date.isoformat()}"
+                f":{loc_type.value}:{team_segment}"
+            )
+            loc_buttons.append({
+                "text": f"{ld['emoji']} {ld['label']} {'✅' if is_active else ''}",
+                "color": _green() if is_active else _grey(),
+                "disabled": is_active,
+                "onClick": {
+                    "action": {
+                        "function": "override_loc",
+                        "parameters": [{"key": "action_id", "value": action_id}],
+                    }
+                },
+            })
+
+        return _wrap_card(
+            card_id="override_status",
+            title="🔧 Override Update",
+            subtitle=f"Overrides are recorded for audit purposes",
+            sections=[
+                {"widgets": widgets},
+                {"widgets": [{"buttonList": {"buttons": meal_buttons}}]},
+                {"widgets": [{"buttonList": {"buttons": loc_buttons}}]},
+            ],
+        )
 
     # ── Utilities ─────────────────────────────────────────────────────────────
 
