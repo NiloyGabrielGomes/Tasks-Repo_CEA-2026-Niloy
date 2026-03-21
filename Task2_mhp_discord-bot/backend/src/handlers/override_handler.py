@@ -2,327 +2,120 @@ import logging
 from datetime import date
 from typing import Any, Dict
 
-from src.handlers.auth import AuthenticatedUser
+from src.adapters.base import UIRenderer
+from src.adapters.normalized import NormalizedInteraction
 from src.models import MealType, WorkLocationType, UserRole
 from src.services.override_service import override_service
-from src.services.meal_service import MEAL_DISPLAY, DEFAULT_MEAL_TYPES
+from src.services.meal_service import MEAL_DISPLAY
 from src.services.location_service import LOCATION_DISPLAY
-from src.services.discord_helpers import extract_team_from_roles
-from src.utils import parse_date_option, format_date_display, validate_date_for_update
+from src.services.team_helpers import extract_team_from_roles
+from src.utils import parse_date_option, validate_date_for_update
 
 logger = logging.getLogger(__name__)
-
-# Discord response types
-RESPONSE_CHANNEL_MESSAGE = 4
-RESPONSE_UPDATE_MESSAGE = 7
-
-# Discord component types
-ACTION_ROW = 1
-BUTTON = 2
-
-# Discord button styles
-BUTTON_PRIMARY = 1    # Blurple
-BUTTON_SECONDARY = 2  # Grey
-BUTTON_SUCCESS = 3    # Green
-BUTTON_DANGER = 4     # Red
 
 # Custom ID prefixes for override buttons
 OVERRIDE_MEAL_PREFIX = "override_meal"
 OVERRIDE_LOC_PREFIX = "override_loc"
 
-# Embed color
-OVERRIDE_EMBED_COLOR = 0xED4245  # Red — distinct from self-service
-
-
-def _get_command_options(interaction: Dict[str, Any]) -> dict[str, Any]:
-    data = interaction.get("data", {})
-    options = data.get("options", [])
-    result: dict[str, Any] = {}
-    for opt in options:
-        if opt.get("type") == 6:  # USER type
-            result[opt["name"]] = opt["value"]
-            # Also capture resolved user data if available
-            resolved = data.get("resolved", {})
-            members = resolved.get("members", {})
-            users = resolved.get("users", {})
-            if opt["value"] in users:
-                result[f"_resolved_user_{opt['name']}"] = users[opt["value"]]
-            if opt["value"] in members:
-                result[f"_resolved_member_{opt['name']}"] = members[opt["value"]]
-        else:
-            result[opt["name"]] = opt["value"]
-    return result
-
-# ── Embed builder ────────────────────────────────────────────────────────────
-
-def _build_override_embed(
-    target_user_id: str,
-    target_username: str,
-    target_date: date,
-    current_state: dict,
-    confirmation: str | None = None,
-) -> Dict[str, Any]:
-    # Meal fields
-    fields = []
-    for meal_type in DEFAULT_MEAL_TYPES:
-        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
-        is_in = current_state["meals"].get(meal_type, True)
-        status_emoji = "✅" if is_in else "❌"
-        status_text = "Opted In" if is_in else "Opted Out"
-        fields.append({
-            "name": f"{display['emoji']} {display['label']}",
-            "value": f"{status_emoji} {status_text}",
-            "inline": True,
-        })
-
-    # Location field
-    loc = current_state["location"]
-    loc_display = LOCATION_DISPLAY.get(loc, {"label": loc.value, "emoji": "📍"})
-    fields.append({
-        "name": f"{loc_display['emoji']} Work Location",
-        "value": f"**{loc_display['label']}**",
-        "inline": True,
-    })
-
-    description_parts = [
-        f"👤 **Employee:** <@{target_user_id}>"
-        f" ({target_username})",
-        f"📅 **Date:** {format_date_display(target_date)}",
-    ]
-
-    if confirmation:
-        description_parts.append("")
-        description_parts.append(confirmation)
-
-    description_parts.append("")
-    description_parts.append("Use the buttons below to update this employee's records.")
-
-    embed = {
-        "title": "🔧 Override Update",
-        "description": "\n".join(description_parts),
-        "fields": fields,
-        "color": OVERRIDE_EMBED_COLOR,
-        "footer": {
-            "text": "Overrides are recorded for audit purposes"
-        },
-    }
-
-    return embed
-
-# ── Button builder ───────────────────────────────────────────────────────────
-
-def _build_override_buttons(
-    actor_id: str,
-    target_user_id: str,
-    target_date: date,
-    current_state: dict,
-) -> list[Dict[str, Any]]:
-    # Meal buttons (row 1)
-    meal_buttons: list[Dict[str, Any]] = []
-    for meal_type in DEFAULT_MEAL_TYPES:
-        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
-        is_in = current_state["meals"].get(meal_type, True)
-
-        # Button will toggle to the opposite state
-        new_state = "out" if is_in else "in"
-        custom_id = (
-            f"{OVERRIDE_MEAL_PREFIX}:{actor_id}:{target_user_id}"
-            f":{target_date.isoformat()}:{meal_type.value}:{new_state}"
-        )
-
-        if is_in:
-            style = BUTTON_SUCCESS
-            label = f"{display['emoji']} {display['label']} ✅"
-        else:
-            style = BUTTON_DANGER
-            label = f"{display['emoji']} {display['label']} ❌"
-
-        meal_buttons.append({
-            "type": BUTTON,
-            "style": style,
-            "label": label,
-            "custom_id": custom_id,
-        })
-
-    # Location buttons (row 2)
-    loc_buttons: list[Dict[str, Any]] = []
-    current_loc = current_state["location"]
-    for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
-        loc_display = LOCATION_DISPLAY.get(loc_type, {"label": loc_type.value, "emoji": "📍"})
-        is_active = loc_type == current_loc
-        custom_id = (
-            f"{OVERRIDE_LOC_PREFIX}:{actor_id}:{target_user_id}"
-            f":{target_date.isoformat()}:{loc_type.value}"
-        )
-
-        if is_active:
-            style = BUTTON_SUCCESS
-            label = f"{loc_display['emoji']} {loc_display['label']} ✅"
-        else:
-            style = BUTTON_SECONDARY
-            label = f"{loc_display['emoji']} {loc_display['label']}"
-
-        loc_buttons.append({
-            "type": BUTTON,
-            "style": style,
-            "label": label,
-            "custom_id": custom_id,
-            "disabled": is_active,
-        })
-
-    rows = [
-        {"type": ACTION_ROW, "components": meal_buttons},
-        {"type": ACTION_ROW, "components": loc_buttons},
-    ]
-    return rows
-
-# ── Command handler ──────────────────────────────────────────────────────────
 
 def handle_override_update(
-    interaction: Dict[str, Any], user: AuthenticatedUser
+    interaction: NormalizedInteraction,
+    renderer: UIRenderer,
 ) -> Dict[str, Any]:
     try:
-        options = _get_command_options(interaction)
+        options = interaction.options
         target_user_id = options.get("employee")
         date_str = options.get("date")
 
         if not target_user_id:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {
-                    "content": "❌ Please select an employee to override.",
-                    "flags": 64,
-                },
-            }
+            return renderer.render_error("Please select an employee to override.")
 
         try:
             target_date = parse_date_option(date_str)
         except ValueError as e:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": f"❌ {e}", "flags": 64},
-            }
+            return renderer.render_error(str(e))
 
         is_valid, error_msg = validate_date_for_update(target_date)
         if not is_valid:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": f"❌ {error_msg}", "flags": 64},
-            }
+            return renderer.render_error(error_msg)
 
         target_team = None
-        resolved_member = options.get(f"_resolved_member_employee")
+        resolved_member = options.get("_resolved_member_employee")
         if resolved_member:
             target_roles = resolved_member.get("roles", [])
             target_team = extract_team_from_roles(target_roles)
 
-        # Team scope check
         allowed, scope_err = override_service.check_team_scope(
-            actor_role=user.role,
-            actor_team=user.team,
+            actor_role=interaction.user.role,
+            actor_team=interaction.user.team,
             target_team=target_team,
         )
         if not allowed:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": scope_err, "flags": 64},
-            }
+            return renderer.render_error(scope_err.lstrip("❌ "))
 
-        current_state = override_service.get_target_current_state(
-            target_user_id, target_date
-        )
-
-        resolved_user = options.get(f"_resolved_user_employee", {})
+        current_state = override_service.get_target_current_state(target_user_id, target_date)
+        resolved_user = options.get("_resolved_user_employee", {})
         target_username = resolved_user.get("username", target_user_id)
 
-        embed = _build_override_embed(
-            target_user_id, target_username, target_date, current_state
+        return renderer.render_override_status(
+            target_user_id, target_username, interaction.user.user_id, target_date, current_state,
+            target_team=target_team,
         )
-        components = _build_override_buttons(
-            user.discord_id, target_user_id, target_date, current_state
-        )
-
-        return {
-            "type": RESPONSE_CHANNEL_MESSAGE,
-            "data": {
-                "embeds": [embed],
-                "components": components,
-                "flags": 64,
-            },
-        }
 
     except Exception as e:
         logger.exception("Error handling override-update: %s", e)
-        return {
-            "type": RESPONSE_CHANNEL_MESSAGE,
-            "data": {
-                "content": "❌ An error occurred while processing the override. Please try again.",
-                "flags": 64,
-            },
-        }
+        return renderer.render_error("An error occurred while processing the override. Please try again.")
 
-# ── Meal override button handler ─────────────────────────────────────────────
 
 def handle_override_meal(
-    interaction: Dict[str, Any], user: AuthenticatedUser
+    interaction: NormalizedInteraction,
+    renderer: UIRenderer,
 ) -> Dict[str, Any]:
     try:
-        data = interaction.get("data", {})
-        custom_id = data.get("custom_id", "")
+        action_id = interaction.action_id or ""
 
-        parts = custom_id.split(":")
-        if len(parts) != 6 or parts[0] != OVERRIDE_MEAL_PREFIX:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": "❌ Invalid button interaction.", "flags": 64},
-            }
+        parts = action_id.split(":")
+        if len(parts) != 7 or parts[0] != OVERRIDE_MEAL_PREFIX:
+            return renderer.render_error("Invalid button interaction.")
 
-        _, actor_id, target_user_id, date_str, meal_type_str, state_str = parts
+        _, actor_id, target_user_id, date_str, meal_type_str, state_str, target_team_str = parts
 
         # Security: only the original actor can click
-        if user.discord_id != actor_id:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {
-                    "content": "❌ Only the user who initiated the override can use these buttons.",
-                    "flags": 64,
-                },
-            }
+        if interaction.user.user_id != actor_id:
+            return renderer.render_error("Only the user who initiated the override can use these buttons.")
 
         target_date = date.fromisoformat(date_str)
 
         try:
             meal_type = MealType(meal_type_str)
         except ValueError:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": f"❌ Unknown meal type: {meal_type_str}", "flags": 64},
-            }
+            return renderer.render_error(f"Unknown meal type: {meal_type_str}")
 
         is_participating = state_str == "in"
+        target_team = target_team_str or None
 
-        target_team = user.team  # fallback to actor's team for TL scope
+        # Re-validate team scope on every button click to prevent cross-team bypass
+        allowed, scope_err = override_service.check_team_scope(
+            actor_role=interaction.user.role,
+            actor_team=interaction.user.team,
+            target_team=target_team,
+        )
+        if not allowed:
+            return renderer.render_error(scope_err.lstrip("❌ "))
 
         success, result = override_service.override_meal(
             target_user_id=target_user_id,
             target_date=target_date,
             meal_type=meal_type,
             is_participating=is_participating,
-            actor_id=user.discord_id,
+            actor_id=interaction.user.user_id,
             target_team=target_team,
         )
 
         if not success:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": f"❌ {result}", "flags": 64},
-            }
+            return renderer.render_error(result)
 
-        # Refresh state and rebuild embed
-        current_state = override_service.get_target_current_state(
-            target_user_id, target_date
-        )
-
+        current_state = override_service.get_target_current_state(target_user_id, target_date)
         display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
         status_text = "✅ Opted In" if is_participating else "❌ Opted Out"
         confirmation = (
@@ -330,149 +123,126 @@ def handle_override_meal(
             f"for <@{target_user_id}>"
         )
 
-        embed = _build_override_embed(
-            target_user_id, target_user_id, target_date, current_state,
-            confirmation=confirmation,
+        status = renderer.render_override_status(
+            target_user_id, target_user_id, actor_id, target_date, current_state, confirmation,
+            target_team=target_team,
         )
-        components = _build_override_buttons(
-            user.discord_id, target_user_id, target_date, current_state
-        )
-
-        return {
-            "type": RESPONSE_UPDATE_MESSAGE,
-            "data": {
-                "embeds": [embed],
-                "components": components,
-            },
-        }
+        return renderer.render_update(status)
 
     except Exception as e:
         logger.exception("Error handling override meal: %s", e)
-        return {
-            "type": RESPONSE_CHANNEL_MESSAGE,
-            "data": {
-                "content": "❌ An error occurred while processing the meal override. Please try again.",
-                "flags": 64,
-            },
-        }
+        return renderer.render_error("An error occurred while processing the meal override. Please try again.")
 
-# ── Location override button handler ─────────────────────────────────────────
 
 def handle_override_location(
-    interaction: Dict[str, Any], user: AuthenticatedUser
+    interaction: NormalizedInteraction,
+    renderer: UIRenderer,
 ) -> Dict[str, Any]:
     try:
-        data = interaction.get("data", {})
-        custom_id = data.get("custom_id", "")
+        action_id = interaction.action_id or ""
 
-        parts = custom_id.split(":")
-        if len(parts) != 5 or parts[0] != OVERRIDE_LOC_PREFIX:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": "❌ Invalid button interaction.", "flags": 64},
-            }
+        parts = action_id.split(":")
+        if len(parts) != 6 or parts[0] != OVERRIDE_LOC_PREFIX:
+            return renderer.render_error("Invalid button interaction.")
 
-        _, actor_id, target_user_id, date_str, loc_str = parts
+        _, actor_id, target_user_id, date_str, loc_str, target_team_str = parts
 
-        if user.discord_id != actor_id:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {
-                    "content": "❌ Only the user who initiated the override can use these buttons.",
-                    "flags": 64,
-                },
-            }
+        if interaction.user.user_id != actor_id:
+            return renderer.render_error("Only the user who initiated the override can use these buttons.")
 
         target_date = date.fromisoformat(date_str)
 
         try:
             location = WorkLocationType(loc_str)
         except ValueError:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": f"❌ Unknown location type: {loc_str}", "flags": 64},
-            }
+            return renderer.render_error(f"Unknown location type: {loc_str}")
 
-        target_team = user.team
+        target_team = target_team_str or None
+
+        # Re-validate team scope on every button click to prevent cross-team bypass
+        allowed, scope_err = override_service.check_team_scope(
+            actor_role=interaction.user.role,
+            actor_team=interaction.user.team,
+            target_team=target_team,
+        )
+        if not allowed:
+            return renderer.render_error(scope_err.lstrip("❌ "))
 
         success, result = override_service.override_location(
             target_user_id=target_user_id,
             target_date=target_date,
             location=location,
-            actor_id=user.discord_id,
+            actor_id=interaction.user.user_id,
             target_team=target_team,
         )
 
         if not success:
-            return {
-                "type": RESPONSE_CHANNEL_MESSAGE,
-                "data": {"content": f"❌ {result}", "flags": 64},
-            }
+            return renderer.render_error(result)
 
-        current_state = override_service.get_target_current_state(
-            target_user_id, target_date
-        )
-
+        current_state = override_service.get_target_current_state(target_user_id, target_date)
         loc_display = LOCATION_DISPLAY.get(location, {"label": location.value, "emoji": "📍"})
         confirmation = (
             f"✅ Updated **{loc_display['emoji']} Work Location** → "
             f"**{loc_display['label']}** for <@{target_user_id}>"
         )
 
-        embed = _build_override_embed(
-            target_user_id, target_user_id, target_date, current_state,
-            confirmation=confirmation,
+        status = renderer.render_override_status(
+            target_user_id, target_user_id, actor_id, target_date, current_state, confirmation,
+            target_team=target_team,
         )
-        components = _build_override_buttons(
-            user.discord_id, target_user_id, target_date, current_state
-        )
-
-        return {
-            "type": RESPONSE_UPDATE_MESSAGE,
-            "data": {
-                "embeds": [embed],
-                "components": components,
-            },
-        }
+        return renderer.render_update(status)
 
     except Exception as e:
         logger.exception("Error handling override location: %s", e)
-        return {
-            "type": RESPONSE_CHANNEL_MESSAGE,
-            "data": {
-                "content": "❌ An error occurred while processing the location override. Please try again.",
-                "flags": 64,
-            },
-        }
+        return renderer.render_error("An error occurred while processing the location override. Please try again.")
 
 
-# ── Feature Lambda entry point (Issue #19) ───────────────────────────────────
+# ── Feature Lambda entry point ────────────────────────────────────────────────
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    interaction = event["interaction"]
-    user_dict = event["user"]
-    dispatch_type = event["dispatch_type"]
+    from src.adapters.discord.renderer import DiscordRenderer
+    from src.adapters.discord.ingress_adapter import _parse_command_options
+    from src.handlers.auth import AuthenticatedUser
 
+    renderer = DiscordRenderer()
+    user_dict = event["user"]
     user = AuthenticatedUser(
-        discord_id=user_dict["discord_id"],
+        user_id=user_dict["user_id"],
         username=user_dict["username"],
-        global_name=user_dict.get("global_name"),
+        display_name=user_dict.get("display_name"),
         role=UserRole(user_dict["role"]),
         team=user_dict.get("team"),
-        guild_id=user_dict["guild_id"],
-        discord_roles=user_dict.get("discord_roles", []),
+        space_id=user_dict.get("space_id", ""),
+        platform_roles=user_dict.get("platform_roles", []),
+        platform=user_dict.get("platform", "discord"),
+    )
+
+    raw_interaction = event.get("interaction", {})
+    dispatch_type = event["dispatch_type"]
+
+    if dispatch_type == "command":
+        options = event.get("options") or _parse_command_options(raw_interaction.get("data", {}))
+        action_id = None
+    else:
+        options = {}
+        action_id = event.get("action_id") or raw_interaction.get("data", {}).get("custom_id")
+
+    normalized = NormalizedInteraction(
+        platform=user_dict.get("platform", "discord"),
+        interaction_type=dispatch_type,
+        command_name=event.get("command_name"),
+        action_id=action_id,
+        options=options,
+        raw_body=raw_interaction,
+        user=user,
     )
 
     if dispatch_type == "command":
-        return handle_override_update(interaction, user)
+        return handle_override_update(normalized, renderer)
     else:
-        # Route to the correct component handler based on custom_id prefix
-        custom_id = interaction.get("data", {}).get("custom_id", "")
+        custom_id = action_id or ""
         if custom_id.startswith(OVERRIDE_MEAL_PREFIX):
-            return handle_override_meal(interaction, user)
+            return handle_override_meal(normalized, renderer)
         if custom_id.startswith(OVERRIDE_LOC_PREFIX):
-            return handle_override_location(interaction, user)
-        return {
-            "type": RESPONSE_CHANNEL_MESSAGE,
-            "data": {"content": "❌ Unknown override component.", "flags": 64},
-        }
+            return handle_override_location(normalized, renderer)
+        return renderer.render_error("Unknown override component.")
