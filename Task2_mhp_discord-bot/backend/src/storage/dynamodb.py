@@ -57,9 +57,9 @@ class DynamoDBStorage:
 
     def put_user(self, user: User) -> None:
         self.table.put_item(Item={
-            "PK": f"USER#{user.discord_id}",
+            "PK": f"USER#{user.user_id}",
             "SK": "PROFILE",
-            "discord_id": user.discord_id,
+            "user_id": user.user_id,
             "name": user.name,
             "email": user.email,
             "role": user.role.value,
@@ -67,18 +67,25 @@ class DynamoDBStorage:
             "is_active": user.is_active,
             "created_at": user.created_at.isoformat(),
             "GSI2PK": "USER",
-            "GSI2SK": f"{user.created_at.isoformat()}#{user.discord_id}",
+            "GSI2SK": f"{user.created_at.isoformat()}#{user.user_id}",
         })
-        # Write external identity lookup for discord
-        self.put_identity(ExternalIdentity(
-            provider="discord",
-            external_id=user.discord_id,
-            user_id=user.discord_id,
-        ))
 
     def get_user_team(self, discord_id: str) -> Optional[str]:
         user = self.get_user(discord_id)
         return user.team if user else None
+
+    def get_canonical_user_id(self, provider: str, external_id: str) -> Optional[str]:
+        try:
+            resp = self.table.get_item(
+                Key={
+                    "PK": f"IDENT#{provider}#{external_id}",
+                    "SK": f"IDENT#{provider}#{external_id}",
+                }
+            )
+            item = resp.get("Item")
+            return item["user_id"] if item else None
+        except ClientError:
+            return None
 
     def get_user_by_identity(self, provider: str, external_id: str) -> Optional[User]:
         try:
@@ -425,7 +432,7 @@ class DynamoDBStorage:
 
 def _parse_user_item(item: dict) -> User:
     return User(
-        discord_id=item["discord_id"],
+        user_id=item.get("user_id") or item.get("discord_id", ""),  # backwards compat
         name=item["name"],
         email=item.get("email"),
         role=UserRole(item.get("role", "employee")),

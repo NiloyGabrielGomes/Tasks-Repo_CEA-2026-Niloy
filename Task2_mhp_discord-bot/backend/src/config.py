@@ -43,6 +43,13 @@ class Settings(BaseModel):
     LOCATION_FUNCTION_NAME: str = ""
     OVERRIDE_FUNCTION_NAME: str = ""
 
+    # Google Chat integration (feature-flagged)
+    ENABLE_GOOGLE_CHAT: bool = False
+    GOOGLE_CHAT_AUDIENCE: str = ""   
+    GOOGLE_CHAT_ADMIN_EMAILS: str = ""
+    GOOGLE_CHAT_TEAM_LEAD_EMAILS: str = ""
+    GOOGLE_CHAT_SERVICE_ACCOUNT_JSON: str = ""  # base64-encoded service account JSON key
+
 @lru_cache()
 def get_settings() -> Settings:
     return Settings(
@@ -53,9 +60,6 @@ def get_settings() -> Settings:
         DISCORD_CLIENT_ID=os.getenv("DISCORD_CLIENT_ID", ""),
         DISCORD_CLIENT_SECRET=os.getenv("DISCORD_CLIENT_SECRET", ""),
         DISCORD_REDIRECT_URI=os.getenv("DISCORD_REDIRECT_URI", ""),
-        ROLE_ADMIN=os.getenv("ROLE_ADMIN", "MHP-Admin"),
-        ROLE_TEAM_LEAD=os.getenv("ROLE_TEAM_LEAD", "MHP-TeamLead"),
-        ROLE_EMPLOYEE=os.getenv("ROLE_EMPLOYEE", "MHP-Employee"),
         ROLE_ADMIN_ID=os.getenv("ROLE_ADMIN_ID", ""),
         ROLE_TEAM_LEAD_ID=os.getenv("ROLE_TEAM_LEAD_ID", ""),
         DYNAMODB_TABLE_NAME=os.getenv("DYNAMODB_TABLE_NAME", "MHP-Data"),
@@ -70,5 +74,10 @@ def get_settings() -> Settings:
         MEAL_FUNCTION_NAME=os.getenv("MEAL_FUNCTION_NAME", ""),
         LOCATION_FUNCTION_NAME=os.getenv("LOCATION_FUNCTION_NAME", ""),
         OVERRIDE_FUNCTION_NAME=os.getenv("OVERRIDE_FUNCTION_NAME", ""),
+        ENABLE_GOOGLE_CHAT=os.getenv("ENABLE_GOOGLE_CHAT", "false").lower() == "true",
+        GOOGLE_CHAT_AUDIENCE=os.getenv("GOOGLE_CHAT_AUDIENCE", ""),
+        GOOGLE_CHAT_ADMIN_EMAILS=os.getenv("GOOGLE_CHAT_ADMIN_EMAILS", ""),
+        GOOGLE_CHAT_TEAM_LEAD_EMAILS=os.getenv("GOOGLE_CHAT_TEAM_LEAD_EMAILS", ""),
+        GOOGLE_CHAT_SERVICE_ACCOUNT_JSON=os.getenv("GOOGLE_CHAT_SERVICE_ACCOUNT_JSON", ""),
     )
 settings = get_settings()
