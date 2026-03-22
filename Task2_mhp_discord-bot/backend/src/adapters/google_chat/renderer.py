@@ -174,6 +174,44 @@ class GoogleChatRenderer(UIRenderer):
             ],
         )
 
+    # ── Headcount / Summary ───────────────────────────────────────────────────
+
+    def render_team_summary(
+        self,
+        target_date: date,
+        team_name: str,
+        summary: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        widgets = _build_summary_widgets(summary)
+        return _wrap_card(
+            card_id="team_summary",
+            title=f"📊 Team Summary — {team_name}",
+            subtitle=format_date_display(target_date),
+            sections=[{"widgets": widgets}],
+        )
+
+    def render_headcount_summary(
+        self,
+        target_date: date,
+        summary: Dict[str, Any],
+        team_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        title = f"📊 Headcount Summary{f' — {team_filter}' if team_filter else ''}"
+        sections = [{"widgets": _build_summary_widgets(summary)}]
+
+        for team, tdata in summary.get("team_breakdown", {}).items():
+            sections.append({
+                "header": team,
+                "widgets": _build_summary_widgets(tdata),
+            })
+
+        return _wrap_card(
+            card_id="headcount_summary",
+            title=title,
+            subtitle=format_date_display(target_date),
+            sections=sections,
+        )
+
     # ── Utilities ─────────────────────────────────────────────────────────────
 
     def render_success(self, message: str) -> Dict[str, Any]:
@@ -228,6 +266,39 @@ def _render_text(text: str) -> Dict[str, Any]:
             }
         }
     }
+
+
+def _build_summary_widgets(summary: Dict[str, Any]) -> list:
+    widgets = []
+
+    special_day = summary.get("special_day")
+    if special_day:
+        note = f" — {special_day.note}" if special_day.note else ""
+        widgets.append({"textParagraph": {"text": f"⚠️ {special_day.day_type.value}{note}"}})
+
+    total = summary.get("total_responding", 0)
+    widgets.append({"textParagraph": {"text": f"👥 <b>{total}</b> employee(s) responded"}})
+
+    for meal_type, counts in summary.get("meal_counts", {}).items():
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        opted_in = counts["opted_in"]
+        opted_out = counts["opted_out"]
+        widgets.append({
+            "decoratedText": {
+                "text": f"{display['emoji']} {display['label']}",
+                "bottomLabel": f"✅ {opted_in} opted in  •  ❌ {opted_out} opted out",
+            }
+        })
+
+    loc = summary.get("location_count", {})
+    widgets.append({
+        "decoratedText": {
+            "text": "📍 Work Location",
+            "bottomLabel": f"🏢 {loc.get('office', 0)} Office  •  🏠 {loc.get('wfh', 0)} WFH",
+        }
+    })
+
+    return widgets
 
 
 def _green() -> Dict[str, Any]:
