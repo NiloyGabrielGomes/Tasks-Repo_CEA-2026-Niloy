@@ -9,9 +9,11 @@ logger = logging.getLogger(__name__)
 
 # ── Command → Lambda function name ───────────────────────────────────────────
 COMMAND_FUNCTION_MAP: Dict[str, str] = {
-    "meal-update":     os.getenv("MEAL_FUNCTION_NAME", ""),
-    "work-location":   os.getenv("LOCATION_FUNCTION_NAME", ""),
-    "override-update": os.getenv("OVERRIDE_FUNCTION_NAME", ""),
+    "meal-update":       os.getenv("MEAL_FUNCTION_NAME", ""),
+    "work-location":     os.getenv("LOCATION_FUNCTION_NAME", ""),
+    "override-update":   os.getenv("OVERRIDE_FUNCTION_NAME", ""),
+    "team-summary":      os.getenv("HEADCOUNT_FUNCTION_NAME", ""),
+    "headcount-summary": os.getenv("HEADCOUNT_FUNCTION_NAME", ""),
 }
 
 # ── Component custom_id prefix → Lambda function name ────────────────────────
