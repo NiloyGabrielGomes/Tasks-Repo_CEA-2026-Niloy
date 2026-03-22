@@ -37,8 +37,9 @@ class DiscordRenderer(UIRenderer):
         target_date: date,
         meals: Dict[MealType, Optional[MealParticipation]],
         confirmation: Optional[str] = None,
+        team: Optional[str] = None,
     ) -> Dict[str, Any]:
-        embed = _build_meal_embed(user_id, target_date, meals, confirmation)
+        embed = _build_meal_embed(user_id, target_date, meals, confirmation, team=team)
         components = _build_meal_buttons(user_id, target_date, meals)
         return {
             "type": RESPONSE_CHANNEL_MESSAGE,
@@ -57,8 +58,9 @@ class DiscordRenderer(UIRenderer):
         target_date: date,
         current: WorkLocationType,
         confirmation: Optional[str] = None,
+        team: Optional[str] = None,
     ) -> Dict[str, Any]:
-        embed = _build_location_embed(user_id, target_date, current, confirmation)
+        embed = _build_location_embed(user_id, target_date, current, confirmation, team=team)
         components = _build_location_buttons(user_id, target_date, current)
         return {
             "type": RESPONSE_CHANNEL_MESSAGE,
@@ -148,6 +150,7 @@ def _build_meal_embed(
     target_date: date,
     meals: Dict[MealType, Optional[MealParticipation]],
     confirmation: Optional[str] = None,
+    team: Optional[str] = None,
 ) -> Dict[str, Any]:
     fields = []
     for meal_type, record in meals.items():
@@ -167,12 +170,16 @@ def _build_meal_embed(
     else:
         description = f"{date_line}\n\nClick a button below to toggle your participation for each meal."
 
+    footer_text = "Default: Opted In for all meals • Toggle to change"
+    if team:
+        footer_text = f"🏷️ Team: {team}  •  {footer_text}"
+
     return {
         "title": "🍽️ Meal Participation",
         "description": description,
         "fields": fields,
         "color": 0x5865F2,  # Discord blurple
-        "footer": {"text": "Default: Opted In for all meals • Toggle to change"},
+        "footer": {"text": footer_text},
     }
 
 
@@ -201,6 +208,7 @@ def _build_location_embed(
     target_date: date,
     current: WorkLocationType,
     confirmation: Optional[str] = None,
+    team: Optional[str] = None,
 ) -> Dict[str, Any]:
     display = LOCATION_DISPLAY.get(current, {"label": current.value, "emoji": "📍"})
     status_line = f"{display['emoji']} **{display['label']}**"
@@ -210,11 +218,15 @@ def _build_location_embed(
         parts += [confirmation, ""]
     parts += [f"Current location: {status_line}", "", "Click a button below to change your work location."]
 
+    footer_text = "Default: Office • WFH days count toward monthly cap"
+    if team:
+        footer_text = f"🏷️ Team: {team}  •  {footer_text}"
+
     return {
         "title": "📍 Work Location",
         "description": "\n".join(parts),
         "color": 0x57F287 if current == WorkLocationType.OFFICE else 0xFEE75C,
-        "footer": {"text": "Default: Office • WFH days count toward monthly cap"},
+        "footer": {"text": footer_text},
     }
 
 
@@ -311,12 +323,41 @@ def _build_team_summary_embed(
         "inline": True,
     })
 
+    # Per-member breakdown
+    members = summary.get("members", [])
+    if members:
+        fields.append({"name": "\u200b", "value": "**👤 Member Details**", "inline": False})
+        for member in members[:25]:  # Discord embed field limit
+            name = member.get("display_name") or member.get("user_id", "Unknown")
+            meal_parts = []
+            for meal_type, is_in in member.get("meals", {}).items():
+                display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+                meal_parts.append(f"{display['emoji']}{'✅' if is_in else '❌'}")
+            loc_val = member.get("location")
+            if loc_val:
+                loc_display = LOCATION_DISPLAY.get(loc_val, {"emoji": "📍"})
+                loc_part = loc_display["emoji"]
+            else:
+                loc_part = "❓"
+            meal_str = " ".join(meal_parts) if meal_parts else "*(no meals)*"
+            fields.append({
+                "name": name,
+                "value": f"{meal_str}  {loc_part}",
+                "inline": True,
+            })
+        if len(members) > 25:
+            fields.append({
+                "name": "\u200b",
+                "value": f"*…and {len(members) - 25} more member(s)*",
+                "inline": False,
+            })
+
     return {
         "title": f"📊 Team Summary — {team_name}",
         "description": "\n".join(parts),
         "fields": fields,
         "color": 0x5865F2,
-        "footer": {"text": "Showing employees who have submitted data for this date"},
+        "footer": {"text": "Showing all team members • ❓ = no response yet"},
     }
 
 

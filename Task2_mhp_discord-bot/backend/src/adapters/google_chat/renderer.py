@@ -18,8 +18,11 @@ class GoogleChatRenderer(UIRenderer):
         target_date: date,
         meals: Dict[MealType, Optional[MealParticipation]],
         confirmation: Optional[str] = None,
+        team: Optional[str] = None,
     ) -> Dict[str, Any]:
         lines = [f"🍽️ *Meal Participation — {format_date_display(target_date)}*"]
+        if team:
+            lines.append(f"🏷️ Team: {team}")
         if confirmation:
             lines.append(confirmation)
         for meal_type, record in meals.items():
@@ -36,8 +39,11 @@ class GoogleChatRenderer(UIRenderer):
         target_date: date,
         current: WorkLocationType,
         confirmation: Optional[str] = None,
+        team: Optional[str] = None,
     ) -> Dict[str, Any]:
         widgets = []
+        if team:
+            widgets.append({"textParagraph": {"text": f"🏷️ Team: {team}"}})
         if confirmation:
             widgets.append({"textParagraph": {"text": confirmation}})
 
@@ -182,12 +188,37 @@ class GoogleChatRenderer(UIRenderer):
         team_name: str,
         summary: Dict[str, Any],
     ) -> Dict[str, Any]:
-        widgets = _build_summary_widgets(summary)
+        sections = [{"widgets": _build_summary_widgets(summary)}]
+
+        members = summary.get("members", [])
+        if members:
+            member_widgets = []
+            for member in members:
+                name = member.get("display_name") or member.get("user_id", "Unknown")
+                meal_parts = []
+                for meal_type, is_in in member.get("meals", {}).items():
+                    display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+                    meal_parts.append(f"{display['emoji']}{'✅' if is_in else '❌'}")
+                loc_val = member.get("location")
+                if loc_val:
+                    loc_display = LOCATION_DISPLAY.get(loc_val, {"emoji": "📍", "label": str(loc_val)})
+                    loc_part = f"{loc_display['emoji']} {loc_display['label']}"
+                else:
+                    loc_part = "❓ No response"
+                bottom = ((" ".join(meal_parts) + "  ") if meal_parts else "") + loc_part
+                member_widgets.append({
+                    "decoratedText": {
+                        "text": name,
+                        "bottomLabel": bottom,
+                    }
+                })
+            sections.append({"header": "👤 Member Details", "widgets": member_widgets})
+
         return _wrap_card(
             card_id="team_summary",
             title=f"📊 Team Summary — {team_name}",
             subtitle=format_date_display(target_date),
-            sections=[{"widgets": widgets}],
+            sections=sections,
         )
 
     def render_headcount_summary(
