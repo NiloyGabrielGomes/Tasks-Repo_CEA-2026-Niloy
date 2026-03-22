@@ -94,6 +94,32 @@ class DiscordRenderer(UIRenderer):
             },
         }
 
+    # ── Headcount / Summary ───────────────────────────────────────────────────
+
+    def render_team_summary(
+        self,
+        target_date: date,
+        team_name: str,
+        summary: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        embed = _build_team_summary_embed(target_date, team_name, summary)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"embeds": [embed], "flags": EPHEMERAL_FLAG},
+        }
+
+    def render_headcount_summary(
+        self,
+        target_date: date,
+        summary: Dict[str, Any],
+        team_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        embed = _build_headcount_summary_embed(target_date, summary, team_filter)
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"embeds": [embed], "flags": EPHEMERAL_FLAG},
+        }
+
     # ── Utilities ─────────────────────────────────────────────────────────────
 
     def render_success(self, message: str) -> Dict[str, Any]:
@@ -251,6 +277,102 @@ def _build_override_embed(
         "fields": fields,
         "color": OVERRIDE_EMBED_COLOR,
         "footer": {"text": "Overrides are recorded for audit purposes"},
+    }
+
+
+def _build_team_summary_embed(
+    target_date: date,
+    team_name: str,
+    summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    special_day = summary.get("special_day")
+    total = summary.get("total_responding", 0)
+
+    parts = [f"📅 **{format_date_display(target_date)}**"]
+    if special_day:
+        parts.append(f"⚠️ *{special_day.day_type.value}*{f' — {special_day.note}' if special_day.note else ''}")
+    parts.append(f"👥 **{total}** employee(s) have submitted data")
+
+    fields = []
+    for meal_type, counts in summary.get("meal_counts", {}).items():
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        opted_in = counts["opted_in"]
+        opted_out = counts["opted_out"]
+        fields.append({
+            "name": f"{display['emoji']} {display['label']}",
+            "value": f"✅ {opted_in} opted in  •  ❌ {opted_out} opted out",
+            "inline": True,
+        })
+
+    loc = summary.get("location_count", {})
+    fields.append({
+        "name": "📍 Work Location",
+        "value": f"🏢 {loc.get('office', 0)} Office  •  🏠 {loc.get('wfh', 0)} WFH",
+        "inline": True,
+    })
+
+    return {
+        "title": f"📊 Team Summary — {team_name}",
+        "description": "\n".join(parts),
+        "fields": fields,
+        "color": 0x5865F2,
+        "footer": {"text": "Showing employees who have submitted data for this date"},
+    }
+
+
+def _build_headcount_summary_embed(
+    target_date: date,
+    summary: Dict[str, Any],
+    team_filter: Optional[str] = None,
+) -> Dict[str, Any]:
+    special_day = summary.get("special_day")
+    total = summary.get("total_responding", 0)
+    title = f"📊 Headcount Summary{f' — {team_filter}' if team_filter else ''}"
+
+    parts = [f"📅 **{format_date_display(target_date)}**"]
+    if special_day:
+        parts.append(f"⚠️ *{special_day.day_type.value}*{f' — {special_day.note}' if special_day.note else ''}")
+    parts.append(f"👥 **{total}** employee(s) total")
+
+    fields = []
+    for meal_type, counts in summary.get("meal_counts", {}).items():
+        display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+        fields.append({
+            "name": f"{display['emoji']} {display['label']}",
+            "value": f"✅ {counts['opted_in']} opted in  •  ❌ {counts['opted_out']} opted out",
+            "inline": True,
+        })
+
+    loc = summary.get("location_count", {})
+    fields.append({
+        "name": "📍 Work Location",
+        "value": f"🏢 {loc.get('office', 0)} Office  •  🏠 {loc.get('wfh', 0)} WFH",
+        "inline": True,
+    })
+
+    # Per-team breakdown (admin all-teams view)
+    team_breakdown = summary.get("team_breakdown", {})
+    if team_breakdown:
+        fields.append({"name": "\u200b", "value": "**Team Breakdown**", "inline": False})
+        for team, tdata in team_breakdown.items():
+            meal_lines = []
+            for meal_type, counts in tdata.get("meal_counts", {}).items():
+                display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+                meal_lines.append(f"{display['emoji']} ✅{counts['opted_in']}/❌{counts['opted_out']}")
+            tloc = tdata.get("location_count", {})
+            loc_line = f"🏢{tloc.get('office', 0)} 🏠{tloc.get('wfh', 0)}"
+            fields.append({
+                "name": f"🏷️ {team} ({tdata.get('total_responding', 0)})",
+                "value": "  ".join(meal_lines) + f"  {loc_line}",
+                "inline": False,
+            })
+
+    return {
+        "title": title,
+        "description": "\n".join(parts),
+        "fields": fields,
+        "color": 0x5865F2,
+        "footer": {"text": "Showing employees who have submitted data for this date"},
     }
 
 

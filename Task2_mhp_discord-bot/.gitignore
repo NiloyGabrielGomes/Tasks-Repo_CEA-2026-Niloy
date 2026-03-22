@@ -36,6 +36,8 @@ backend/deployment.zip
 # SAM build artifacts
 .aws-sam/
 samconfig.toml
+layer/
+Makefile
 
 # Data files (JSON storage & SQLite)
 backend/data/*.json

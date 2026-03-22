@@ -28,6 +28,7 @@ from src.handlers.override_handler import (
     OVERRIDE_LOC_PREFIX,
 )
 from src.handlers.link_handler import handle_link_identity
+from src.handlers.headcount_handler import handle_team_summary, handle_headcount_summary
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -110,6 +111,10 @@ def _route_command(normalized) -> Dict[str, Any]:
         return handle_override_update(normalized, _renderer)
     if cmd == "link-identity":
         return handle_link_identity(normalized, _renderer)
+    if cmd == "team-summary":
+        return handle_team_summary(normalized, _renderer)
+    if cmd == "headcount-summary":
+        return handle_headcount_summary(normalized, _renderer)
     return _renderer.render_error(f"Unknown command: `{cmd}`")
 
 

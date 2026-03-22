@@ -69,6 +69,26 @@ class UIRenderer(ABC):
     ) -> Dict[str, Any]:
         """Return a response payload for the override view."""
 
+    # ── Headcount / Summary ───────────────────────────────────────────────────
+
+    @abstractmethod
+    def render_team_summary(
+        self,
+        target_date: date,
+        team_name: str,
+        summary: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Return a response payload showing team-level headcount summary."""
+
+    @abstractmethod
+    def render_headcount_summary(
+        self,
+        target_date: date,
+        summary: Dict[str, Any],
+        team_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return a response payload showing full headcount summary with optional team breakdown."""
+
     # ── Utilities ─────────────────────────────────────────────────────────────
 
     @abstractmethod

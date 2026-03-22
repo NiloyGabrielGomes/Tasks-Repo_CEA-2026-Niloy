@@ -25,6 +25,7 @@ from src.handlers.override_handler import (
     OVERRIDE_LOC_PREFIX,
 )
 from src.handlers.link_handler import handle_link_identity
+from src.handlers.headcount_handler import handle_team_summary, handle_headcount_summary
 from src.handlers import dispatcher
 from src.config import settings
 
@@ -79,6 +80,10 @@ def _route_inprocess(normalized, interaction_type: int) -> Dict[str, Any]:
             return handle_override_update(normalized, _renderer)
         if cmd == "link-identity":
             return handle_link_identity(normalized, _renderer)
+        if cmd == "team-summary":
+            return handle_team_summary(normalized, _renderer)
+        if cmd == "headcount-summary":
+            return handle_headcount_summary(normalized, _renderer)
         return {
             "type": RESPONSE_CHANNEL_MESSAGE,
             "data": {
