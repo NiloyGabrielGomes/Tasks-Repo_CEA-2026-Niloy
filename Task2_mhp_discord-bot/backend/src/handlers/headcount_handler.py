@@ -35,7 +35,7 @@ def handle_team_summary(
                 "You are not assigned to a team. Ask an admin to assign you to a team."
             )
 
-        summary = headcount_service.get_team_summary(target_date, team_name)
+        summary = headcount_service.get_team_member_details(target_date, team_name)
         return renderer.render_team_summary(target_date, team_name, summary)
 
     except Exception as e:

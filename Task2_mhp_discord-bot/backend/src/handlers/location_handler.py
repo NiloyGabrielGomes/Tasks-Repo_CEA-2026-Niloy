@@ -33,7 +33,7 @@ def handle_work_location(
 
         record = location_service.get_user_location_for_date(interaction.user.user_id, target_date)
         current = location_service.get_current_location(record)
-        return renderer.render_location_status(interaction.user.user_id, target_date, current)
+        return renderer.render_location_status(interaction.user.user_id, target_date, current, team=interaction.user.team)
 
     except Exception as e:
         logger.exception("Error handling work-location: %s", e)
@@ -82,7 +82,7 @@ def handle_location_set(
         loc_display_info = location_service.get_location_display_info(location)
         confirmation = f"Updated → {loc_display_info['emoji']} **{loc_display_info['label']}**"
         status = renderer.render_location_status(
-            interaction.user.user_id, target_date, location, confirmation=confirmation
+            interaction.user.user_id, target_date, location, confirmation=confirmation, team=interaction.user.team
         )
         return renderer.render_update(status)
 
