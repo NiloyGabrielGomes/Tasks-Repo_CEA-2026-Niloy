@@ -33,6 +33,42 @@ class HeadcountService:
             "total_responding": len(user_ids),
         }
 
+    def get_team_member_details(self, target_date: date, team_name: str) -> Dict[str, Any]:
+        """Aggregate summary + per-member participation detail for a team on a given date."""
+        summary = self.get_team_summary(target_date, team_name)
+
+        meals = self.storage.get_meals_for_date_and_team(target_date, team_name)
+        locations = self.storage.get_locations_for_date_and_team(target_date, team_name)
+
+        meal_map: Dict[str, dict] = defaultdict(dict)
+        for m in meals:
+            meal_map[m.user_id][m.meal_type] = m.is_participating
+
+        loc_map: Dict[str, Any] = {loc.user_id: loc.location for loc in locations}
+
+        users = self.storage.get_users_by_team(team_name)
+        members = []
+        for u in users:
+            members.append({
+                "user_id": u.user_id,
+                "display_name": u.display_name or u.username,
+                "meals": meal_map.get(u.user_id, {}),
+                "location": loc_map.get(u.user_id),
+            })
+
+        # Include users who responded but aren't in the user roster yet
+        roster_ids = {u.user_id for u in users}
+        for uid in (set(meal_map) | set(loc_map)) - roster_ids:
+            members.append({
+                "user_id": uid,
+                "display_name": uid,
+                "meals": meal_map.get(uid, {}),
+                "location": loc_map.get(uid),
+            })
+
+        summary["members"] = members
+        return summary
+
     def get_headcount_summary(
         self, target_date: date, team_filter: Optional[str] = None
     ) -> Dict[str, Any]:

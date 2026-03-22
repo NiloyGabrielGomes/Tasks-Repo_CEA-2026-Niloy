@@ -115,6 +115,9 @@ class DynamoDBStorage:
             print(f"Error listing users: {e}")
         return users
 
+    def get_users_by_team(self, team_name: str) -> list[User]:
+        return [u for u in self.get_all_users() if u.team == team_name]
+
     # ── External Identity ────────────────────────────────────────────────────
 
     def put_identity(self, identity: ExternalIdentity) -> None:

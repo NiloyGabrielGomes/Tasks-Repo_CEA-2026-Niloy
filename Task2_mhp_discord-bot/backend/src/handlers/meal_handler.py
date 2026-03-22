@@ -32,7 +32,7 @@ def handle_meal_update(
             return renderer.render_error(error_msg)
 
         meals = meal_service.get_user_meals_for_date(interaction.user.user_id, target_date)
-        return renderer.render_meal_status(interaction.user.user_id, target_date, meals)
+        return renderer.render_meal_status(interaction.user.user_id, target_date, meals, team=interaction.user.team)
 
     except Exception as e:
         logger.exception(f"Error handling meal-update: {e}")
@@ -80,7 +80,7 @@ def handle_meal_toggle(
             f"Click a button below to toggle your participation for each meal."
         )
 
-        status = renderer.render_meal_status(interaction.user.user_id, target_date, updated_meals, confirmation)
+        status = renderer.render_meal_status(interaction.user.user_id, target_date, updated_meals, confirmation, team=interaction.user.team)
         return renderer.render_update(status)
 
     except Exception as e:
