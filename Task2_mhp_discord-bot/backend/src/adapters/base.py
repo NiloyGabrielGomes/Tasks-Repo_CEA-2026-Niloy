@@ -39,6 +39,7 @@ class UIRenderer(ABC):
         target_date: date,
         meals: Dict["MealType", Optional["MealParticipation"]],
         confirmation: Optional[str] = None,
+        team: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Return a response payload showing meal participation status."""
 
@@ -51,6 +52,7 @@ class UIRenderer(ABC):
         target_date: date,
         current: "WorkLocationType",
         confirmation: Optional[str] = None,
+        team: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Return a response payload showing work location."""
 
