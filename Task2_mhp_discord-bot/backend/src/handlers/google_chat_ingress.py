@@ -10,6 +10,8 @@ from src.adapters.google_chat.auth_adapter import GoogleChatUserResolver
 from src.adapters.google_chat.renderer import GoogleChatRenderer
 from src.adapters.google_chat.ingress_adapter import GoogleChatIngressAdapter
 from src.handlers.auth import check_command_authorization
+from src.models import User
+from src.storage.dynamodb import storage as _db
 from src.handlers.meal_handler import (
     handle_meal_update,
     handle_meal_toggle,
@@ -67,6 +69,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         user = _resolver.resolve(body)
         logger.info(f"Google Chat user: {user.username} ({user.user_id}), role: {user.role.value}")
+        _db.upsert_user(User(
+            user_id=user.user_id,
+            name=user.display_name or user.username,
+            role=user.role,
+            team=user.team,
+        ))
 
         normalized = _adapter.normalize(body, user)
         if not normalized:
