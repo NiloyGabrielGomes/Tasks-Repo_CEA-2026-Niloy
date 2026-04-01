@@ -48,24 +48,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logger.info("Google Chat interaction received")
 
     if not settings.ENABLE_GOOGLE_CHAT:
-        return {
-            "statusCode": 503,
-            "body": json.dumps({"error": "Google Chat integration not enabled"}),
-        }
+        return {"text": "Google Chat integration not enabled"}
 
     try:
-        if not _verifier.verify(event):
-            return {
-                "statusCode": 401,
-                "body": json.dumps({"error": "Unauthorized"}),
-            }
+        verified = _verifier.verify(event)
+        print(f"[DEBUG] verify={verified}")
+        if not verified:
+            return {"text": "Unauthorized"}
 
         body = _verifier.extract_body(event)
+        print(f"[DEBUG] body keys={list(body.keys()) if body else None}")
         if not body:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Failed to parse request body"}),
-            }
+            return {"text": "Failed to parse request body"}
 
         user = _resolver.resolve(body)
         logger.info(f"Google Chat user: {user.username} ({user.user_id}), role: {user.role.value}")
@@ -77,18 +71,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ))
 
         normalized = _adapter.normalize(body, user)
+        print(f"[DEBUG] normalized: type={getattr(normalized,'interaction_type',None)} action_id={getattr(normalized,'action_id',None)} cmd={getattr(normalized,'command_name',None)}")
         if not normalized:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Unsupported event type"}),
-            }
+            return {"text": "Unsupported event type"}
 
         # Authorization check for commands
         if normalized.interaction_type == "command" and normalized.command_name:
             is_authorized, error_msg = check_command_authorization(normalized.command_name, user)
             if not is_authorized:
-                response = _renderer.render_error(error_msg)
-                return _ok(response)
+                return _unwrap_render_actions(_renderer.render_error(error_msg))
 
         if normalized.interaction_type == "command":
             response = _route_command(normalized)
@@ -96,17 +87,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             response = _route_action(normalized)
 
         if normalized.interaction_type == "action":
-            # Button clicks: respond synchronously (Google Chat requires it)
-            return _ok(_unwrap_render_actions(response))
+            # Button clicks: respond synchronously with UPDATE_MESSAGE
+            update_response = _renderer.render_update(response)
+            print(f"[DEBUG] action sync response: {json.dumps(update_response)[:500]}")
+            return update_response
         else:
-            # Slash commands: respond asynchronously via Chat REST API
-            space_name = _extract_space_name(body)
-            _post_to_chat(space_name, response)
-            return _ok({})
+            # Slash commands: return card synchronously
+            unwrapped = _unwrap_render_actions(response)
+            print(f"[DEBUG] command sync response: {json.dumps(unwrapped)[:500]}")
+            return unwrapped
 
     except Exception as e:
+        import traceback
+        print(f"[DEBUG] EXCEPTION: {type(e).__name__}: {e}")
+        print(f"[DEBUG] TRACEBACK: {traceback.format_exc()}")
         logger.exception(f"Error handling Google Chat interaction: {e}")
-        return _ok({"text": "❌ An error occurred processing your request"})
+        return {"text": "❌ An error occurred processing your request"}
 
 
 def _route_command(normalized) -> Dict[str, Any]:
@@ -221,8 +217,8 @@ class _SimpleResponse:
 
 
 def _ok(response: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(response),
-    }
+    # HTTP API v2 (payload format 2.0): returning a dict without statusCode/body
+    # makes API Gateway serialize it as JSON with Content-Type: application/json.
+    # The old {statusCode, headers, body} format resulted in text/plain content-type
+    # which Google Chat rejects.
+    return response
