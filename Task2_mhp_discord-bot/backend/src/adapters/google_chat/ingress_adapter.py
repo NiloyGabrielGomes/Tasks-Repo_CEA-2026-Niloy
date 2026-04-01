@@ -18,6 +18,24 @@ class GoogleChatIngressAdapter:
     ) -> Optional[NormalizedInteraction]:
         chat = body.get("chat") or {}
 
+        # ── New API format: card/button click (check BEFORE appCommandPayload) ──
+        # Google Chat includes appCommandPayload as context in button click events,
+        # so buttonClickedPayload must be checked first to avoid misclassification.
+        btn_payload = chat.get("buttonClickedPayload")
+        if btn_payload:
+            action = btn_payload.get("action") or {}
+            params = {p["key"]: p["value"] for p in action.get("parameters", [])}
+            action_id = params.get("action_id", "")
+            return NormalizedInteraction(
+                platform="google_chat",
+                interaction_type="action",
+                command_name=None,
+                action_id=action_id,
+                options=params,
+                raw_body=body,
+                user=user,
+            )
+
         # ── New API format: slash command ──────────────────────────────────────
         app_cmd = chat.get("appCommandPayload")
         if app_cmd:
@@ -38,22 +56,6 @@ class GoogleChatIngressAdapter:
                 )
             logger.warning("Google Chat APP_COMMAND text does not start with '/': %r", text)
             return None
-
-        # ── New API format: card/button click ──────────────────────────────────
-        btn_payload = chat.get("buttonClickedPayload")
-        if btn_payload:
-            action = btn_payload.get("action") or {}
-            params = {p["key"]: p["value"] for p in action.get("parameters", [])}
-            action_id = params.get("action_id", "")
-            return NormalizedInteraction(
-                platform="google_chat",
-                interaction_type="action",
-                command_name=None,
-                action_id=action_id,
-                options=params,
-                raw_body=body,
-                user=user,
-            )
 
         # ── Legacy API format ──────────────────────────────────────────────────
         event_type = body.get("type", "")
