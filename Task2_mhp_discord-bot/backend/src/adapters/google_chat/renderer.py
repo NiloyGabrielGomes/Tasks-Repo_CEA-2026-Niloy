@@ -20,16 +20,39 @@ class GoogleChatRenderer(UIRenderer):
         confirmation: Optional[str] = None,
         team: Optional[str] = None,
     ) -> Dict[str, Any]:
-        lines = [f"🍽️ *Meal Participation — {format_date_display(target_date)}*"]
+        info_widgets = []
         if team:
-            lines.append(f"🏷️ Team: {team}")
+            info_widgets.append({"textParagraph": {"text": f"🏷️ Team: {team}"}})
         if confirmation:
-            lines.append(confirmation)
+            info_widgets.append({"textParagraph": {"text": confirmation}})
+
+        buttons = []
         for meal_type, record in meals.items():
             display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
             is_in = record.is_participating if record is not None else True
-            lines.append(f"{display['emoji']} {display['label']}: {'✅ Opted In' if is_in else '❌ Opted Out'}")
-        return _render_text("\n".join(lines))
+            action_id = f"meal_toggle:{user_id}:{target_date.isoformat()}:{meal_type.value}"
+            buttons.append({
+                "text": f"{display['emoji']} {display['label']} {'✅' if is_in else '❌'}",
+                "color": _green() if is_in else _grey(),
+                "onClick": {
+                    "action": {
+                        "function": "meal_toggle",
+                        "parameters": [{"key": "action_id", "value": action_id}],
+                    }
+                },
+            })
+
+        sections = []
+        if info_widgets:
+            sections.append({"widgets": info_widgets})
+        sections.append({"widgets": [{"buttonList": {"buttons": buttons}}]})
+
+        return _wrap_card(
+            card_id="meal_status",
+            title="🍽️ Meal Participation",
+            subtitle=format_date_display(target_date),
+            sections=sections,
+        )
 
     # ── Location ─────────────────────────────────────────────────────────────
 
@@ -252,8 +275,18 @@ class GoogleChatRenderer(UIRenderer):
         return _render_text(f"❌ {message}")
 
     def render_update(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Wrap card payload as an in-place message update."""
-        return payload
+        """Return the card update format Google Chat HTTP apps require for CARD_CLICKED responses."""
+        try:
+            cards_v2 = (
+                payload["renderActions"]["hostAppAction"]["chatAction"]
+                ["createMessageAction"]["message"]["cardsV2"]
+            )
+            return {
+                "actionResponse": {"type": "UPDATE_MESSAGE"},
+                "cardsV2": cards_v2,
+            }
+        except (KeyError, TypeError):
+            return payload
 
 
 # ── Private helpers ───────────────────────────────────────────────────────────
