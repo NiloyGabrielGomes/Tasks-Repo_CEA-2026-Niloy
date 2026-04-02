@@ -20,38 +20,31 @@ class GoogleChatRenderer(UIRenderer):
         confirmation: Optional[str] = None,
         team: Optional[str] = None,
     ) -> Dict[str, Any]:
-        info_widgets = []
+        widgets = []
         if team:
-            info_widgets.append({"textParagraph": {"text": f"🏷️ Team: {team}"}})
+            widgets.append({"textParagraph": {"text": f"🏷️ Team: {team}"}})
         if confirmation:
-            info_widgets.append({"textParagraph": {"text": confirmation}})
+            widgets.append({"textParagraph": {"text": confirmation}})
 
-        buttons = []
         for meal_type, record in meals.items():
             display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
             is_in = record.is_participating if record is not None else True
-            action_id = f"meal_toggle:{user_id}:{target_date.isoformat()}:{meal_type.value}"
-            buttons.append({
-                "text": f"{display['emoji']} {display['label']} {'✅' if is_in else '❌'}",
-                "color": _green() if is_in else _grey(),
-                "onClick": {
-                    "action": {
-                        "function": "meal_toggle",
-                        "parameters": [{"key": "action_id", "value": action_id}],
-                    }
-                },
+            widgets.append({
+                "decoratedText": {
+                    "text": f"{display['emoji']} {display['label']}",
+                    "bottomLabel": f"{'✅ Opted In' if is_in else '❌ Opted Out'}",
+                }
             })
 
-        sections = []
-        if info_widgets:
-            sections.append({"widgets": info_widgets})
-        sections.append({"widgets": [{"buttonList": {"buttons": buttons}}]})
+        widgets.append({"textParagraph": {
+            "text": "<i>Use <b>/meal-update lunch</b> or <b>/meal-update snacks</b> to toggle</i>",
+        }})
 
         return _wrap_card(
             card_id="meal_status",
             title="🍽️ Meal Participation",
             subtitle=format_date_display(target_date),
-            sections=sections,
+            sections=[{"widgets": widgets}],
         )
 
     # ── Location ─────────────────────────────────────────────────────────────
@@ -78,31 +71,15 @@ class GoogleChatRenderer(UIRenderer):
             }
         })
 
-        buttons = []
-        for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
-            loc_display = LOCATION_DISPLAY.get(loc_type, {"label": loc_type.value, "emoji": "📍"})
-            is_active = loc_type == current
-            action_id = f"location_set:{user_id}:{target_date.isoformat()}:{loc_type.value}"
-            buttons.append({
-                "text": f"{loc_display['emoji']} {loc_display['label']} {'✅' if is_active else ''}",
-                "color": _green() if is_active else _grey(),
-                "disabled": is_active,
-                "onClick": {
-                    "action": {
-                        "function": "location_set",
-                        "parameters": [{"key": "action_id", "value": action_id}],
-                    }
-                },
-            })
+        widgets.append({"textParagraph": {
+            "text": "<i>Use <b>/work-location office</b> or <b>/work-location wfh</b> to change</i>",
+        }})
 
         return _wrap_card(
             card_id="location_status",
             title="📍 Work Location",
             subtitle=format_date_display(target_date),
-            sections=[
-                {"widgets": widgets},
-                {"widgets": [{"buttonList": {"buttons": buttons}}]},
-            ],
+            sections=[{"widgets": widgets}],
         )
 
     # ── Override ─────────────────────────────────────────────────────────────
