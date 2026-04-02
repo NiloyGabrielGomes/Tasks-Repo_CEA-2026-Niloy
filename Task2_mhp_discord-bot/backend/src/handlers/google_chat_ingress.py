@@ -78,18 +78,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Authorization check for commands
         if normalized.interaction_type == "command" and normalized.command_name:
             is_authorized, error_msg = check_command_authorization(normalized.command_name, user)
+            print(f"[DEBUG] auth: cmd={normalized.command_name} role={user.role.value} authorized={is_authorized}")
             if not is_authorized:
-                return _unwrap_render_actions(_renderer.render_error(error_msg))
+                space_name = _extract_space_name(body)
+                error_response = _unwrap_render_actions(_renderer.render_error(error_msg))
+                _post_to_chat(space_name, error_response)
+                return {}
 
         if normalized.interaction_type == "command":
+            print(f"[DEBUG] routing command: {normalized.command_name}")
             response = _route_command(normalized)
+            print(f"[DEBUG] command response type: {type(response).__name__}")
         else:
             response = _route_action(normalized)
 
         if normalized.interaction_type == "action":
             # Button clicks: respond synchronously with UPDATE_MESSAGE
             update_response = _renderer.render_update(response)
-            print(f"[DEBUG] action sync response: {json.dumps(update_response)[:500]}")
+            print(f"[DEBUG] action sync response: {json.dumps(update_response, default=str)[:500]}")
             return update_response
         else:
             # Slash commands: post async via Chat REST API, return empty
