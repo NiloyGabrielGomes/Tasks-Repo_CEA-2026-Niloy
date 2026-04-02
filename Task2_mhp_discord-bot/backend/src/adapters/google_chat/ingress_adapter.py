@@ -100,8 +100,14 @@ class GoogleChatIngressAdapter:
 
 def _parse_text_options(raw_args: str) -> Dict[str, Any]:
     options: Dict[str, Any] = {}
+    positional = []
     for token in raw_args.split():
         if ":" in token:
             key, _, value = token.partition(":")
             options[key.strip()] = value.strip()
+        else:
+            positional.append(token)
+    # Store positional args so handlers can use them (e.g. "/meal-update lunch")
+    if positional:
+        options["_args"] = positional
     return options
