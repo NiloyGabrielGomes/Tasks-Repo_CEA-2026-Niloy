@@ -222,6 +222,15 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${S3BucketName}
                   - !Sub arn:aws:s3:::${S3BucketName}/*
+        - PolicyName: trainee-2026-niloy-mhp-gchat-ssm-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mhp/gchat-sa-json
 
   # ── Single HTTP API Gateway ───────────────────────────────────────────────────
 
