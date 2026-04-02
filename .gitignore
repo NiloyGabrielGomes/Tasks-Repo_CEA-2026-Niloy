@@ -3,3 +3,9 @@ Task2_mhp_discord-bot/
 plans/
 CLAUDE.md
 .claude/
+
+# Terraform
+Task1_mhp-app/terraform/.terraform/
+Task1_mhp-app/terraform/*.tfstate
+Task1_mhp-app/terraform/*.tfstate.backup
+Task1_mhp-app/terraform/.terraform.lock.hcl
