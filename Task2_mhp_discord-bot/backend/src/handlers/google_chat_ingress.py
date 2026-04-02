@@ -92,10 +92,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             print(f"[DEBUG] action sync response: {json.dumps(update_response)[:500]}")
             return update_response
         else:
-            # Slash commands: return card synchronously
+            # Slash commands: post async via Chat REST API, return empty
+            # (sync responses don't work with API Gateway v2 + Google Chat)
+            space_name = _extract_space_name(body)
             unwrapped = _unwrap_render_actions(response)
-            print(f"[DEBUG] command sync response: {json.dumps(unwrapped)[:500]}")
-            return unwrapped
+            print(f"[DEBUG] posting async to space={space_name}")
+            _post_to_chat(space_name, unwrapped)
+            print(f"[DEBUG] async post complete")
+            return {}
 
     except Exception as e:
         import traceback
@@ -157,10 +161,30 @@ def _extract_space_name(body: Dict[str, Any]) -> Optional[str]:
     return space.get("name")
 
 
+_sa_json_cache: Optional[str] = None
+
+
+def _get_sa_json_from_ssm() -> Optional[str]:
+    """Read service account JSON from SSM Parameter Store (cached across warm invocations)."""
+    global _sa_json_cache
+    if _sa_json_cache:
+        return _sa_json_cache
+    try:
+        import boto3
+        ssm = boto3.client("ssm", region_name="ap-south-1")
+        resp = ssm.get_parameter(Name="/mhp/gchat-sa-json", WithDecryption=True)
+        _sa_json_cache = resp["Parameter"]["Value"]
+        return _sa_json_cache
+    except Exception as e:
+        print(f"[DEBUG] SSM read failed: {e}")
+        return None
+
+
 def _get_chat_access_token() -> Optional[str]:
-    sa_json_b64 = settings.GOOGLE_CHAT_SERVICE_ACCOUNT_JSON
+    # Try env var first, then SSM
+    sa_json_b64 = settings.GOOGLE_CHAT_SERVICE_ACCOUNT_JSON or _get_sa_json_from_ssm()
     if not sa_json_b64:
-        logger.error("GOOGLE_CHAT_SERVICE_ACCOUNT_JSON not configured")
+        print("[DEBUG] No service account JSON available (env or SSM)")
         return None
     try:
         from google.oauth2 import service_account
@@ -171,7 +195,7 @@ def _get_chat_access_token() -> Optional[str]:
         creds.refresh(_SimpleRequest())
         return creds.token
     except Exception as e:
-        logger.error("Failed to get Chat API access token: %s", e)
+        print(f"[DEBUG] Failed to get Chat API access token: {e}")
         return None
 
 
@@ -184,7 +208,7 @@ def _post_to_chat(space_name: Optional[str], message: Dict[str, Any]) -> None:
         return
 
     url = f"https://chat.googleapis.com/v1/{space_name}/messages"
-    body_bytes = json.dumps(_unwrap_render_actions(message)).encode()
+    body_bytes = json.dumps(_unwrap_render_actions(message), default=str).encode()
     req = urllib.request.Request(
         url,
         data=body_bytes,
