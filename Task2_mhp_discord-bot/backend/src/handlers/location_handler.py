@@ -6,7 +6,7 @@ from typing import Any, Dict
 from src.adapters.base import UIRenderer
 from src.adapters.normalized import NormalizedInteraction
 from src.models import WorkLocationType, UserRole
-from src.services.location_service import location_service
+from src.services.location_service import location_service, LOCATION_DISPLAY
 from src.utils import parse_date_option, validate_date_for_update
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,34 @@ def handle_work_location(
         is_valid, error_msg = validate_date_for_update(target_date)
         if not is_valid:
             return renderer.render_error(error_msg)
+
+        # Google Chat text-based set: /work-location office or /work-location wfh
+        args = interaction.options.get("_args", [])
+        if args and interaction.platform == "google_chat":
+            loc_arg = args[0].lower()
+            try:
+                new_location = WorkLocationType(loc_arg)
+            except ValueError:
+                return renderer.render_error(
+                    f"Unknown location: **{loc_arg}**. Use `office` or `wfh`."
+                )
+            success, result = location_service.set_work_location(
+                discord_id=interaction.user.user_id,
+                target_date=target_date,
+                location=new_location,
+                updated_by=interaction.user.user_id,
+                team=interaction.user.team,
+            )
+            if not success:
+                return renderer.render_error(result)
+            loc_display = LOCATION_DISPLAY.get(new_location, {"label": new_location.value, "emoji": "📍"})
+            confirmation = f"✅ Location set to {loc_display['emoji']} {loc_display['label']}"
+            record = location_service.get_user_location_for_date(interaction.user.user_id, target_date)
+            current = location_service.get_current_location(record)
+            return renderer.render_location_status(
+                interaction.user.user_id, target_date, current,
+                confirmation=confirmation, team=interaction.user.team,
+            )
 
         record = location_service.get_user_location_for_date(interaction.user.user_id, target_date)
         current = location_service.get_current_location(record)
