@@ -126,58 +126,39 @@ class GoogleChatRenderer(UIRenderer):
             }
         })
 
-        # Meal buttons
-        meal_buttons = []
+        # Text-based override instructions (replaces interactive buttons)
+        date_iso = target_date.isoformat()
+        meal_lines = []
         for meal_type in DEFAULT_MEAL_TYPES:
             display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
             is_in = current_state["meals"].get(meal_type, True)
-            new_state = "out" if is_in else "in"
-            action_id = (
-                f"override_meal:{actor_id}:{target_user_id}:{target_date.isoformat()}"
-                f":{meal_type.value}:{new_state}:{team_segment}"
+            status = "✅ In" if is_in else "❌ Out"
+            meal_lines.append(
+                f"{display['emoji']} {display['label']} ({status}): "
+                f"<b>/override-update employee:{target_user_id} date:{date_iso} meal:{meal_type.value}</b>"
             )
-            meal_buttons.append({
-                "text": f"{display['emoji']} {display['label']} {'✅' if is_in else '❌'}",
-                "color": _green() if is_in else _red(),
-                "onClick": {
-                    "action": {
-                        "function": "override_meal",
-                        "parameters": [{"key": "action_id", "value": action_id}],
-                    }
-                },
-            })
 
-        # Location buttons
-        loc_buttons = []
-        current_loc = current_state["location"]
+        loc_lines = []
         for loc_type in (WorkLocationType.OFFICE, WorkLocationType.WFH):
             ld = LOCATION_DISPLAY.get(loc_type, {"label": loc_type.value, "emoji": "📍"})
-            is_active = loc_type == current_loc
-            action_id = (
-                f"override_loc:{actor_id}:{target_user_id}:{target_date.isoformat()}"
-                f":{loc_type.value}:{team_segment}"
-            )
-            loc_buttons.append({
-                "text": f"{ld['emoji']} {ld['label']} {'✅' if is_active else ''}",
-                "color": _green() if is_active else _grey(),
-                "disabled": is_active,
-                "onClick": {
-                    "action": {
-                        "function": "override_loc",
-                        "parameters": [{"key": "action_id", "value": action_id}],
-                    }
-                },
-            })
+            if loc_type != loc:
+                loc_lines.append(
+                    f"{ld['emoji']} Switch to {ld['label']}: "
+                    f"<b>/override-update employee:{target_user_id} date:{date_iso} location:{loc_type.value}</b>"
+                )
+
+        instruction_text = "<i>To toggle a meal or change location, use one of these commands:</i>\n\n"
+        instruction_text += "\n".join(meal_lines)
+        if loc_lines:
+            instruction_text += "\n" + "\n".join(loc_lines)
+
+        widgets.append({"textParagraph": {"text": instruction_text}})
 
         return _wrap_card(
             card_id="override_status",
             title="🔧 Override Update",
-            subtitle=f"Overrides are recorded for audit purposes",
-            sections=[
-                {"widgets": widgets},
-                {"widgets": [{"buttonList": {"buttons": meal_buttons}}]},
-                {"widgets": [{"buttonList": {"buttons": loc_buttons}}]},
-            ],
+            subtitle="Overrides are recorded for audit purposes",
+            sections=[{"widgets": widgets}],
         )
 
     # ── Headcount / Summary ───────────────────────────────────────────────────
