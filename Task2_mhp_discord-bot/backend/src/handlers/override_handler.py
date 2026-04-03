@@ -31,13 +31,19 @@ def handle_override_update(
         if not target_user_id:
             return renderer.render_error("Please select an employee to override.")
 
-        # Resolve email to canonical user ID on Google Chat
         target_user = None
         if "@" in target_user_id:
+            # Email address — resolve via identity mapping
+            target_user = db.get_user_by_identity("google_chat", target_user_id)
+            if target_user:
+                target_user_id = target_user.user_id
+        elif target_user_id.startswith("users/"):
+            # Google Chat user ID from @mention — resolve via identity mapping
             target_user = db.get_user_by_identity("google_chat", target_user_id)
             if target_user:
                 target_user_id = target_user.user_id
         else:
+            # Direct user ID (e.g. Discord snowflake)
             target_user = db.get_user(target_user_id)
 
         if not target_user:
@@ -71,7 +77,11 @@ def handle_override_update(
 
         current_state = override_service.get_target_current_state(target_user_id, target_date)
         resolved_user = options.get("_resolved_user_employee", {})
-        target_username = resolved_user.get("username") or (target_user.name if target_user else target_user_id)
+        target_username = (
+            resolved_user.get("username")
+            or options.get("_mention_display_name")
+            or (target_user.name if target_user else target_user_id)
+        )
 
         return renderer.render_override_status(
             target_user_id, target_username, interaction.user.user_id, target_date, current_state,
