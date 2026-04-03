@@ -83,6 +83,74 @@ def handle_override_update(
             or (target_user.name if target_user else target_user_id)
         )
 
+        # Google Chat: apply override directly if meal or location param is given
+        if interaction.platform == "google_chat":
+            meal_param = options.get("meal")
+            location_param = options.get("location")
+
+            if meal_param:
+                try:
+                    meal_type = MealType(meal_param.lower())
+                except ValueError:
+                    return renderer.render_error(
+                        f"Unknown meal type: **{meal_param}**. Use `lunch` or `snacks`."
+                    )
+                current_is_in = current_state["meals"].get(meal_type, True)
+                new_is_participating = not current_is_in
+
+                success, result = override_service.override_meal(
+                    target_user_id=target_user_id,
+                    target_date=target_date,
+                    meal_type=meal_type,
+                    is_participating=new_is_participating,
+                    actor_id=interaction.user.user_id,
+                    target_team=target_team,
+                )
+                if not success:
+                    return renderer.render_error(result)
+
+                current_state = override_service.get_target_current_state(target_user_id, target_date)
+                display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+                status_text = "✅ Opted In" if new_is_participating else "❌ Opted Out"
+                confirmation = (
+                    f"✅ Updated {display['emoji']} {display['label']} → {status_text} "
+                    f"for {target_username}"
+                )
+                return renderer.render_override_status(
+                    target_user_id, target_username, interaction.user.user_id,
+                    target_date, current_state, confirmation=confirmation,
+                    target_team=target_team,
+                )
+
+            if location_param:
+                try:
+                    location = WorkLocationType(location_param.lower())
+                except ValueError:
+                    return renderer.render_error(
+                        f"Unknown location: **{location_param}**. Use `office` or `wfh`."
+                    )
+                success, result = override_service.override_location(
+                    target_user_id=target_user_id,
+                    target_date=target_date,
+                    location=location,
+                    actor_id=interaction.user.user_id,
+                    target_team=target_team,
+                )
+                if not success:
+                    return renderer.render_error(result)
+
+                current_state = override_service.get_target_current_state(target_user_id, target_date)
+                loc_display = LOCATION_DISPLAY.get(location, {"label": location.value, "emoji": "📍"})
+                confirmation = (
+                    f"✅ Updated {loc_display['emoji']} Work Location → "
+                    f"**{loc_display['label']}** for {target_username}"
+                )
+                return renderer.render_override_status(
+                    target_user_id, target_username, interaction.user.user_id,
+                    target_date, current_state, confirmation=confirmation,
+                    target_team=target_team,
+                )
+
         return renderer.render_override_status(
             target_user_id, target_username, interaction.user.user_id, target_date, current_state,
             target_team=target_team,
