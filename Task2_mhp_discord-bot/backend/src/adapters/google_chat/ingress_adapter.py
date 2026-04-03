@@ -45,6 +45,7 @@ class GoogleChatIngressAdapter:
                 command_name = text[1:].split()[0]
                 raw_args = text[len(command_name) + 1:].strip()
                 options = _parse_text_options(raw_args)
+                _enrich_with_mentions(options, message)
                 return NormalizedInteraction(
                     platform="google_chat",
                     interaction_type="command",
@@ -67,6 +68,7 @@ class GoogleChatIngressAdapter:
             if text.startswith("/"):
                 command_name = text[1:].split()[0]
                 options = _parse_text_options(arg_text or text[len(command_name) + 1:].strip())
+                _enrich_with_mentions(options, message)
                 return NormalizedInteraction(
                     platform="google_chat",
                     interaction_type="command",
@@ -111,3 +113,27 @@ def _parse_text_options(raw_args: str) -> Dict[str, Any]:
     if positional:
         options["_args"] = positional
     return options
+
+
+def _enrich_with_mentions(options: Dict[str, Any], message: Dict[str, Any]) -> None:
+    annotations = message.get("annotations") or []
+    for ann in annotations:
+        if ann.get("type") != "USER_MENTION":
+            continue
+        mention_user = (ann.get("userMention") or {}).get("user") or {}
+        mention_email = mention_user.get("email", "")
+        mention_id = mention_user.get("name", "")  # e.g. "users/12345"
+        mention_display = mention_user.get("displayName", "")
+
+        # If employee is already set to an email, don't overwrite
+        employee_val = options.get("employee", "")
+        if "@" in employee_val and "." in employee_val:
+            break
+
+        # Use email if available, otherwise fall back to Google Chat user ID
+        resolved = mention_email or mention_id
+        if resolved:
+            options["employee"] = resolved
+            if mention_display:
+                options["_mention_display_name"] = mention_display
+        break  # only use the first user mention
