@@ -9,6 +9,7 @@ from src.services.override_service import override_service
 from src.services.meal_service import MEAL_DISPLAY
 from src.services.location_service import LOCATION_DISPLAY
 from src.services.team_helpers import extract_team_from_roles
+from src.storage.dynamodb import db
 from src.utils import parse_date_option, validate_date_for_update
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,18 @@ def handle_override_update(
         if not target_user_id:
             return renderer.render_error("Please select an employee to override.")
 
+        # Resolve email to canonical user ID on Google Chat
+        target_user = None
+        if "@" in target_user_id:
+            target_user = db.get_user_by_identity("google_chat", target_user_id)
+            if target_user:
+                target_user_id = target_user.user_id
+        else:
+            target_user = db.get_user(target_user_id)
+
+        if not target_user:
+            return renderer.render_error("Employee not found. Please check the email or user ID and try again.")
+
         try:
             target_date = parse_date_option(date_str)
         except ValueError as e:
@@ -39,11 +52,14 @@ def handle_override_update(
         if not is_valid:
             return renderer.render_error(error_msg)
 
+        # Resolve target team — prefer Discord resolved member, fall back to DB user
         target_team = None
         resolved_member = options.get("_resolved_member_employee")
         if resolved_member:
             target_roles = resolved_member.get("roles", [])
             target_team = extract_team_from_roles(target_roles)
+        elif target_user and target_user.team:
+            target_team = target_user.team
 
         allowed, scope_err = override_service.check_team_scope(
             actor_role=interaction.user.role,
@@ -55,7 +71,7 @@ def handle_override_update(
 
         current_state = override_service.get_target_current_state(target_user_id, target_date)
         resolved_user = options.get("_resolved_user_employee", {})
-        target_username = resolved_user.get("username", target_user_id)
+        target_username = resolved_user.get("username") or (target_user.name if target_user else target_user_id)
 
         return renderer.render_override_status(
             target_user_id, target_username, interaction.user.user_id, target_date, current_state,
