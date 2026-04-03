@@ -9,7 +9,7 @@ from src.services.override_service import override_service
 from src.services.meal_service import MEAL_DISPLAY
 from src.services.location_service import LOCATION_DISPLAY
 from src.services.team_helpers import extract_team_from_roles
-from src.storage.dynamodb import db
+from src.storage.dynamodb import storage as db
 from src.utils import parse_date_option, validate_date_for_update
 
 logger = logging.getLogger(__name__)
