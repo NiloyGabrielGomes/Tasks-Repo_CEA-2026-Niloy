@@ -321,15 +321,3 @@ def _build_summary_widgets(summary: Dict[str, Any]) -> list:
     })
 
     return widgets
-
-
-def _green() -> Dict[str, Any]:
-    return {"red": 0.341, "green": 0.694, "blue": 0.278, "alpha": 1}
-
-
-def _red() -> Dict[str, Any]:
-    return {"red": 0.929, "green": 0.259, "blue": 0.271, "alpha": 1}
-
-
-def _grey() -> Dict[str, Any]:
-    return {"red": 0.6, "green": 0.6, "blue": 0.6, "alpha": 1}

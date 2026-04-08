@@ -232,11 +232,3 @@ class _SimpleResponse:
         self.status = status
         self.headers = headers
         self.data = data
-
-
-def _ok(response: Dict[str, Any]) -> Dict[str, Any]:
-    # HTTP API v2 (payload format 2.0): returning a dict without statusCode/body
-    # makes API Gateway serialize it as JSON with Content-Type: application/json.
-    # The old {statusCode, headers, body} format resulted in text/plain content-type
-    # which Google Chat rejects.
-    return response
