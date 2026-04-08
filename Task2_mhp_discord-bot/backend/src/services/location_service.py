@@ -1,4 +1,5 @@
 # Business logic for work location CRUD + validation
+import calendar
 import logging
 from datetime import date, datetime
 
@@ -127,7 +128,6 @@ class LocationService:
     def _get_user_wfh_days_in_month(
         self, discord_id: str, target_date: date
     ) -> list[WorkLocation]:
-        import calendar
 
         year = target_date.year
         month = target_date.month
