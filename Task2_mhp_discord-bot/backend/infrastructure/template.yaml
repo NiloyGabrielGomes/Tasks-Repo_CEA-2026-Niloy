@@ -134,6 +134,17 @@ Resources:
                   - !GetAtt LocationFunction.Arn
                   - !GetAtt OverrideFunction.Arn
                   - !GetAtt HeadcountFunction.Arn
+        - PolicyName: trainee-2026-niloy-mhp-ingress-dynamodb-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt MHPTable.Arn
 
   # Feature role: DynamoDB + S3 (used by meal, location, override Lambdas)
   FeatureExecutionRole:
