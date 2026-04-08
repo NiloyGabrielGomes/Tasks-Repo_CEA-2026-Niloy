@@ -28,8 +28,14 @@ def handle_team_summary(
         else:
             target_date = get_dhaka_today()
 
-        # Team leads see their own team; admins can optionally specify a different team
-        team_name = interaction.options.get("team") or interaction.user.team
+        # Admins can specify any team; team leads are locked to their own team
+        requested_team = interaction.options.get("team")
+        if requested_team and interaction.user.role != UserRole.ADMIN:
+            if requested_team != interaction.user.team:
+                return renderer.render_error(
+                    "You can only view your own team's summary."
+                )
+        team_name = requested_team if interaction.user.role == UserRole.ADMIN else interaction.user.team
         if not team_name:
             return renderer.render_error(
                 "You are not assigned to a team. Ask an admin to assign you to a team."

@@ -70,6 +70,30 @@ class DynamoDBStorage:
             "GSI2SK": f"{user.created_at.isoformat()}#{user.user_id}",
         })
 
+    def upsert_user(self, user: User) -> None:
+        """Update mutable fields; set created_at only on first write."""
+        now = user.created_at.isoformat()
+        self.table.update_item(
+            Key={"PK": f"USER#{user.user_id}", "SK": "PROFILE"},
+            UpdateExpression=(
+                "SET #n = :name, #r = :role, #t = :team, "
+                "is_active = :is_active, user_id = :user_id, "
+                "GSI2PK = :gsi2pk, GSI2SK = :gsi2sk, "
+                "created_at = if_not_exists(created_at, :created_at)"
+            ),
+            ExpressionAttributeNames={"#n": "name", "#r": "role", "#t": "team"},
+            ExpressionAttributeValues={
+                ":name": user.name,
+                ":role": user.role.value,
+                ":team": user.team,
+                ":is_active": user.is_active,
+                ":user_id": user.user_id,
+                ":gsi2pk": "USER",
+                ":gsi2sk": f"{now}#{user.user_id}",
+                ":created_at": now,
+            },
+        )
+
     def get_user_team(self, discord_id: str) -> Optional[str]:
         user = self.get_user(discord_id)
         return user.team if user else None

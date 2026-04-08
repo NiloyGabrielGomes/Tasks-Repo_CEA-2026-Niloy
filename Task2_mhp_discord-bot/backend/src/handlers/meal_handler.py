@@ -6,7 +6,7 @@ from typing import Any, Dict
 from src.adapters.base import UIRenderer
 from src.adapters.normalized import NormalizedInteraction
 from src.models import MealType, UserRole
-from src.services.meal_service import meal_service
+from src.services.meal_service import meal_service, MEAL_DISPLAY
 from src.utils import parse_date_option, validate_date_for_update
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,35 @@ def handle_meal_update(
         is_valid, error_msg = validate_date_for_update(target_date)
         if not is_valid:
             return renderer.render_error(error_msg)
+
+        # Google Chat text-based toggle: /meal-update lunch or /meal-update snacks
+        args = interaction.options.get("_args", [])
+        if args and interaction.platform == "google_chat":
+            meal_arg = args[0].lower()
+            try:
+                meal_type = MealType(meal_arg)
+            except ValueError:
+                return renderer.render_error(
+                    f"Unknown meal type: **{meal_arg}**. Use `lunch` or `snacks`."
+                )
+            success, result = meal_service.toggle_meal_participation(
+                discord_id=interaction.user.user_id,
+                target_date=target_date,
+                meal_type=meal_type,
+                updated_by=interaction.user.user_id,
+                team=interaction.user.team,
+            )
+            if not success:
+                return renderer.render_error(result)
+            meal_record = result
+            status = "opted in" if meal_record.is_participating else "opted out"
+            display = MEAL_DISPLAY.get(meal_type, {"label": meal_type.value, "emoji": "🍽️"})
+            confirmation = f"✅ {display['emoji']} {display['label']}: {status}"
+            meals = meal_service.get_user_meals_for_date(interaction.user.user_id, target_date)
+            return renderer.render_meal_status(
+                interaction.user.user_id, target_date, meals,
+                confirmation=confirmation, team=interaction.user.team,
+            )
 
         meals = meal_service.get_user_meals_for_date(interaction.user.user_id, target_date)
         return renderer.render_meal_status(interaction.user.user_id, target_date, meals, team=interaction.user.team)
@@ -95,27 +124,32 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     from src.handlers.auth import AuthenticatedUser
 
     renderer = DiscordRenderer()
-    user_dict = event["user"]
-    user = AuthenticatedUser(
-        user_id=user_dict["user_id"],
-        username=user_dict["username"],
-        display_name=user_dict.get("display_name"),
-        role=UserRole(user_dict["role"]),
-        team=user_dict.get("team"),
-        space_id=user_dict.get("space_id", ""),
-        platform_roles=user_dict.get("platform_roles", []),
-        platform=user_dict.get("platform", "discord"),
-    )
 
-    normalized = NormalizedInteraction(
-        platform=user_dict.get("platform", "discord"),
-        interaction_type=event["dispatch_type"],
-        command_name=event.get("command_name"),
-        action_id=event.get("action_id") or event.get("interaction", {}).get("data", {}).get("custom_id"),
-        options=event.get("options") or _extract_options_from_raw(event.get("interaction", {})),
-        raw_body=event.get("interaction", {}),
-        user=user,
-    )
+    try:
+        user_dict = event["user"]
+        user = AuthenticatedUser(
+            user_id=user_dict["user_id"],
+            username=user_dict["username"],
+            display_name=user_dict.get("display_name"),
+            role=UserRole(user_dict["role"]),
+            team=user_dict.get("team"),
+            space_id=user_dict.get("space_id", ""),
+            platform_roles=user_dict.get("platform_roles", []),
+            platform=user_dict.get("platform", "discord"),
+        )
+
+        normalized = NormalizedInteraction(
+            platform=user_dict.get("platform", "discord"),
+            interaction_type=event["dispatch_type"],
+            command_name=event.get("command_name"),
+            action_id=event.get("action_id") or event.get("interaction", {}).get("data", {}).get("custom_id"),
+            options=event.get("options") or _extract_options_from_raw(event.get("interaction", {})),
+            raw_body=event.get("interaction", {}),
+            user=user,
+        )
+    except KeyError as e:
+        logger.error("Malformed dispatch event, missing key: %s", e)
+        return renderer.render_error(f"Internal error: missing required field {e}")
 
     if event["dispatch_type"] == "command":
         return handle_meal_update(normalized, renderer)

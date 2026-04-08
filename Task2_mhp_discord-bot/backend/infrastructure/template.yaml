@@ -7,11 +7,6 @@ Description: Meal Headcount Planner Discord Bot - Serverless Infrastructure
 
 # Parameters
 Parameters:
-  Environment:
-    Type: String
-    Default: dev
-    Description: Deployment environment
-
   DiscordPublicKey:
     Type: String
     NoEcho: true
@@ -30,111 +25,94 @@ Parameters:
     Type: String
     Description: Discord server/guild ID
 
+  DynamoDBTableName:
+    Type: String
+    Description: Name of the existing DynamoDB table
+
+  S3BucketName:
+    Type: String
+    Description: Name of the existing S3 bucket
+
+  EnableGoogleChat:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Feature flag to enable Google Chat integration
+
+  GoogleChatAudience:
+    Type: String
+    Default: ""
+    Description: JWT audience for Google Chat verification — set to your API Gateway endpoint URL (e.g. https://xxx.execute-api.ap-south-1.amazonaws.com/prod/google-chat)
+
+  RoleAdminId:
+    Type: String
+    Default: ""
+    Description: Discord role ID for MHP-Admin (right-click role in Discord → Copy Role ID)
+
+  RoleTeamLeadId:
+    Type: String
+    Default: ""
+    Description: Discord role ID for MHP-TeamLead (right-click role in Discord → Copy Role ID)
+
+  GoogleChatServiceAccountJson:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Base64-encoded GCP service account JSON key for posting messages via Chat REST API
+
 # Globals
 Globals:
   Function:
     Runtime: python3.12
     Timeout: 30
     MemorySize: 256
+    Layers:
+      - !Ref SharedDepsLayer
     Environment:
       Variables:
-        ENVIRONMENT: !Ref Environment
         DISCORD_PUBLIC_KEY: !Ref DiscordPublicKey
         DISCORD_APPLICATION_ID: !Ref DiscordApplicationId
         DISCORD_BOT_TOKEN: !Ref DiscordBotToken
         DISCORD_GUILD_ID: !Ref DiscordGuildId
-        DYNAMODB_TABLE_NAME: !Ref DynamoDBTable
-        S3_BUCKET: !Ref S3Bucket
+        DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+        S3_BUCKET: !Ref S3BucketName
         CUTOFF_TIME: "21:00"
         WFH_MONTHLY_CAP: "5"
         FORWARD_PLANNING_DAYS: "7"
         TIMEZONE: "Asia/Dhaka"
+        # Multi-Lambda dispatch (Issue #19) — set to "true" to enable
+        ENABLE_MULTI_LAMBDA: "true"
+        MEAL_FUNCTION_NAME: trainee-2026-niloy-mhp-meal
+        LOCATION_FUNCTION_NAME: trainee-2026-niloy-mhp-location
+        OVERRIDE_FUNCTION_NAME: trainee-2026-niloy-mhp-override
+        HEADCOUNT_FUNCTION_NAME: trainee-2026-niloy-mhp-headcount
+        # Google Chat integration (Issue #18) — set ENABLE_GOOGLE_CHAT to "true" to enable
+        ENABLE_GOOGLE_CHAT: !Ref EnableGoogleChat
+        GOOGLE_CHAT_AUDIENCE: !Ref GoogleChatAudience
 
 # Resources
 Resources:
-  # DynamoDB Table - Single Table Design with GSI1 (date-centric) and GSI2 (identity/team-centric)
-  DynamoDBTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub trainee-2026-niloy-mhp-${Environment}-data
-      BillingMode: PROVISIONED
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
-      AttributeDefinitions:
-        - AttributeName: PK
-          AttributeType: S
-        - AttributeName: SK
-          AttributeType: S
-        - AttributeName: GSI1PK
-          AttributeType: S
-        - AttributeName: GSI1SK
-          AttributeType: S
-        - AttributeName: GSI2PK
-          AttributeType: S
-        - AttributeName: GSI2SK
-          AttributeType: S
-      KeySchema:
-        - AttributeName: PK
-          KeyType: HASH
-        - AttributeName: SK
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: GSI1
-          KeySchema:
-            - AttributeName: GSI1PK
-              KeyType: HASH
-            - AttributeName: GSI1SK
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
-        - IndexName: GSI2
-          KeySchema:
-            - AttributeName: GSI2PK
-              KeyType: HASH
-            - AttributeName: GSI2SK
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-          ProvisionedThroughput:
-            ReadCapacityUnits: 5
-            WriteCapacityUnits: 5
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: MHP-Discord-Bot
+  # ── Shared Lambda Layer ───────────────────────────────────────────────────────
+  # All pip packages live here. Functions bundle only Python source (via Makefile).
 
-  # S3 Bucket for Reports
-  S3Bucket:
-    Type: AWS::S3::Bucket
+  SharedDepsLayer:
+    Type: AWS::Serverless::LayerVersion
     Properties:
-      BucketName: !Sub trainee-2026-niloy-mhp-${Environment}-reports
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: MHP-Discord-Bot
+      LayerName: trainee-2026-niloy-mhp-deps
+      ContentUri: ../layer/
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.12
 
-  # IAM Role for Lambda
-  LambdaExecutionRole:
+  # ── IAM Roles ────────────────────────────────────────────────────────────────
+
+  # Ingress role: CloudWatch logs + Lambda invoke only (no DynamoDB)
+  IngressExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub trainee-2026-niloy-mhp-lambda-role-${Environment}
+      RoleName: trainee-2026-niloy-mhp-ingress-role
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -145,7 +123,45 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: !Sub trainee-2026-niloy-mhp-dynamodb-policy-${Environment}
+        - PolicyName: trainee-2026-niloy-mhp-ingress-invoke-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt MealFunction.Arn
+                  - !GetAtt LocationFunction.Arn
+                  - !GetAtt OverrideFunction.Arn
+                  - !GetAtt HeadcountFunction.Arn
+        - PolicyName: trainee-2026-niloy-mhp-ingress-dynamodb-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt MHPTable.Arn
+
+  # Feature role: DynamoDB + S3 (used by meal, location, override Lambdas)
+  FeatureExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: trainee-2026-niloy-mhp-feature-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: trainee-2026-niloy-mhp-feature-dynamodb-policy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -159,9 +175,9 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:BatchWriteItem
                 Resource:
-                  - !GetAtt DynamoDBTable.Arn
-                  - !Sub ${DynamoDBTable.Arn}/index/*
-        - PolicyName: !Sub trainee-2026-niloy-mhp-s3-policy-${Environment}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}/index/*
+        - PolicyName: trainee-2026-niloy-mhp-feature-s3-policy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -171,75 +187,190 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !GetAtt S3Bucket.Arn
-                  - !Sub ${S3Bucket.Arn}/*
+                  - !Sub arn:aws:s3:::${S3BucketName}
+                  - !Sub arn:aws:s3:::${S3BucketName}/*
 
-  # Discord Interaction Lambda Function
+  # Google Chat ingress role — DynamoDB + S3, no Lambda invoke needed (synchronous path)
+  GoogleChatIngressExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: trainee-2026-niloy-mhp-gchat-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: trainee-2026-niloy-mhp-gchat-dynamodb-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}
+                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}/index/*
+        - PolicyName: trainee-2026-niloy-mhp-gchat-s3-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::${S3BucketName}
+                  - !Sub arn:aws:s3:::${S3BucketName}/*
+        - PolicyName: trainee-2026-niloy-mhp-gchat-ssm-policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/mhp/gchat-sa-json
+
+  # ── Single HTTP API Gateway ───────────────────────────────────────────────────
+
+  BotApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: trainee-2026-niloy-mhp-api
+      StageName: prod
+
+  # ── Lambda Functions ──────────────────────────────────────────────────────────
+
+  # Ingress: signature verification, auth, dispatch
   InteractionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub trainee-2026-niloy-mhp-interaction-${Environment}
-      Handler: src.handlers.interaction.lambda_handler
-      CodeUri: ../src
-      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: trainee-2026-niloy-mhp-ingress
+      Handler: src.handlers.ingress.lambda_handler
+      CodeUri: ../
+      Role: !GetAtt IngressExecutionRole.Arn
+      Environment:
+        Variables:
+          ROLE_ADMIN_ID: !Ref RoleAdminId
+          ROLE_TEAM_LEAD_ID: !Ref RoleTeamLeadId
       Events:
-        Api:
-          Type: Api
+        DiscordRoute:
+          Type: HttpApi
           Properties:
             Path: /discord
             Method: POST
-            RestApiId: !Ref DiscordApi
+            ApiId: !Ref BotApi
+    Metadata:
+      BuildMethod: makefile
 
-  # Discord API Gateway
-  DiscordApi:
-    Type: AWS::Serverless::Api
+  # Feature Lambdas — invoked by IngressFunction; no direct API trigger
+  MealFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      Name: !Sub trainee-2026-niloy-mhp-discord-api-${Environment}
-      StageName: !Ref Environment
-      DefinitionBody:
-        openapi: "3.0.1"
-        info:
-          title: MHP Discord Bot API
-          version: "1.0"
-        paths:
-          /discord:
-            post:
-              x-amazon-apigateway-integration:
-                uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${InteractionFunction.Arn}/invocations
-                httpMethod: POST
-                type: aws_proxy
+      FunctionName: trainee-2026-niloy-mhp-meal
+      Handler: src.handlers.meal_handler.lambda_handler
+      CodeUri: ../
+      Role: !GetAtt FeatureExecutionRole.Arn
+    Metadata:
+      BuildMethod: makefile
 
-  # Permission for API Gateway to invoke Lambda
-  ApiGatewayLambdaPermission:
-    Type: AWS::Lambda::Permission
+  LocationFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Ref InteractionFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DiscordApi}/${Environment}/POST/discord
+      FunctionName: trainee-2026-niloy-mhp-location
+      Handler: src.handlers.location_handler.lambda_handler
+      CodeUri: ../
+      Role: !GetAtt FeatureExecutionRole.Arn
+    Metadata:
+      BuildMethod: makefile
+
+  OverrideFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: trainee-2026-niloy-mhp-override
+      Handler: src.handlers.override_handler.lambda_handler
+      CodeUri: ../
+      Role: !GetAtt FeatureExecutionRole.Arn
+    Metadata:
+      BuildMethod: makefile
+
+  HeadcountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: trainee-2026-niloy-mhp-headcount
+      Handler: src.handlers.headcount_handler.lambda_handler
+      CodeUri: ../
+      Role: !GetAtt FeatureExecutionRole.Arn
+    Metadata:
+      BuildMethod: makefile
+
+  # Google Chat ingress Lambda
+  GoogleChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: trainee-2026-niloy-mhp-gchat-ingress
+      Handler: src.handlers.google_chat_ingress.lambda_handler
+      CodeUri: ../
+      Role: !GetAtt GoogleChatIngressExecutionRole.Arn
+      Environment:
+        Variables:
+          # Function-level Environment overrides Globals (not merge).
+          # GOOGLE_CHAT_SERVICE_ACCOUNT_JSON removed — exceeds 4KB env limit.
+          # Will use SSM Parameter Store when async posting is needed.
+          DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+          S3_BUCKET: !Ref S3BucketName
+          CUTOFF_TIME: "21:00"
+          WFH_MONTHLY_CAP: "5"
+          FORWARD_PLANNING_DAYS: "7"
+          TIMEZONE: "Asia/Dhaka"
+          ENABLE_GOOGLE_CHAT: !Ref EnableGoogleChat
+          GOOGLE_CHAT_AUDIENCE: !Ref GoogleChatAudience
+          ROLE_ADMIN_ID: !Ref RoleAdminId
+          ROLE_TEAM_LEAD_ID: !Ref RoleTeamLeadId
+      Events:
+        GoogleChatRoute:
+          Type: HttpApi
+          Properties:
+            Path: /google-chat
+            Method: POST
+            ApiId: !Ref BotApi
+    Metadata:
+      BuildMethod: makefile
 
 # Outputs
 Outputs:
-  DynamoDBTableName:
-    Description: DynamoDB Table Name
-    Value: !Ref DynamoDBTable
+  BotApiEndpoint:
+    Description: Base API URL — Discord uses /discord, Google Chat uses /google-chat
+    Value: !Sub https://${BotApi}.execute-api.${AWS::Region}.amazonaws.com/prod
     Export:
-      Name: !Sub ${AWS::StackName}-DynamoDBTable
-
-  S3BucketName:
-    Description: S3 Bucket Name for Reports
-    Value: !Ref S3Bucket
-    Export:
-      Name: !Sub ${AWS::StackName}-S3Bucket
-
-  DiscordApiEndpoint:
-    Description: Discord API Endpoint URL
-    Value: !Sub https://${DiscordApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/discord
-    Export:
-      Name: !Sub ${AWS::StackName}-DiscordApiEndpoint
+      Name: !Sub ${AWS::StackName}-BotApiEndpoint
 
   InteractionFunctionArn:
-    Description: Interaction Lambda Function ARN
+    Description: Discord ingress Lambda ARN
     Value: !GetAtt InteractionFunction.Arn
     Export:
       Name: !Sub ${AWS::StackName}-InteractionFunctionArn
+
+  GoogleChatFunctionArn:
+    Description: Google Chat ingress Lambda ARN
+    Value: !GetAtt GoogleChatFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-GoogleChatFunctionArn
+
+  HeadcountFunctionArn:
+    Description: Headcount summary Lambda ARN
+    Value: !GetAtt HeadcountFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-HeadcountFunctionArn

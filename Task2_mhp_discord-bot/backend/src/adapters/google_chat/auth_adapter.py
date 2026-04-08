@@ -73,9 +73,10 @@ def _get_gchat_role_map() -> dict:
 
 
 def _lookup_role(email: str) -> UserRole:
-    # 1. DynamoDB policy
+    # 1. DynamoDB policy — supports "email": "admin" or "email": {"role": "admin", "team": "X"}
     role_map = _get_gchat_role_map()
-    role_str = role_map.get(email, "")
+    entry = role_map.get(email, "")
+    role_str = entry.get("role", "") if isinstance(entry, dict) else entry
     if role_str == "admin":
         return UserRole.ADMIN
     if role_str == "team_lead":

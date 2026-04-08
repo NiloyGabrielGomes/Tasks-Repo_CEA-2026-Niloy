@@ -42,6 +42,7 @@ class Settings(BaseModel):
     MEAL_FUNCTION_NAME: str = ""
     LOCATION_FUNCTION_NAME: str = ""
     OVERRIDE_FUNCTION_NAME: str = ""
+    HEADCOUNT_FUNCTION_NAME: str = ""
 
     # Google Chat integration (feature-flagged)
     ENABLE_GOOGLE_CHAT: bool = False
@@ -74,6 +75,7 @@ def get_settings() -> Settings:
         MEAL_FUNCTION_NAME=os.getenv("MEAL_FUNCTION_NAME", ""),
         LOCATION_FUNCTION_NAME=os.getenv("LOCATION_FUNCTION_NAME", ""),
         OVERRIDE_FUNCTION_NAME=os.getenv("OVERRIDE_FUNCTION_NAME", ""),
+        HEADCOUNT_FUNCTION_NAME=os.getenv("HEADCOUNT_FUNCTION_NAME", ""),
         ENABLE_GOOGLE_CHAT=os.getenv("ENABLE_GOOGLE_CHAT", "false").lower() == "true",
         GOOGLE_CHAT_AUDIENCE=os.getenv("GOOGLE_CHAT_AUDIENCE", ""),
         GOOGLE_CHAT_ADMIN_EMAILS=os.getenv("GOOGLE_CHAT_ADMIN_EMAILS", ""),

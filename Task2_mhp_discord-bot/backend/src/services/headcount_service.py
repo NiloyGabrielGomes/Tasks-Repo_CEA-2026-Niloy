@@ -51,7 +51,7 @@ class HeadcountService:
         for u in users:
             members.append({
                 "user_id": u.user_id,
-                "display_name": u.display_name or u.username,
+                "display_name": u.name,
                 "meals": meal_map.get(u.user_id, {}),
                 "location": loc_map.get(u.user_id),
             })
