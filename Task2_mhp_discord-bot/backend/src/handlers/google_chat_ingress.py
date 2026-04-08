@@ -52,12 +52,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     try:
         verified = _verifier.verify(event)
-        print(f"[DEBUG] verify={verified}")
         if not verified:
             return {"text": "Unauthorized"}
 
         body = _verifier.extract_body(event)
-        print(f"[DEBUG] body keys={list(body.keys()) if body else None}")
         if not body:
             return {"text": "Failed to parse request body"}
 
@@ -71,14 +69,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ))
 
         normalized = _adapter.normalize(body, user)
-        print(f"[DEBUG] normalized: type={getattr(normalized,'interaction_type',None)} action_id={getattr(normalized,'action_id',None)} cmd={getattr(normalized,'command_name',None)}")
         if not normalized:
             return {"text": "Unsupported event type"}
 
         # Authorization check for commands
         if normalized.interaction_type == "command" and normalized.command_name:
             is_authorized, error_msg = check_command_authorization(normalized.command_name, user)
-            print(f"[DEBUG] auth: cmd={normalized.command_name} role={user.role.value} authorized={is_authorized}")
             if not is_authorized:
                 space_name = _extract_space_name(body)
                 error_response = _unwrap_render_actions(_renderer.render_error(error_msg))
@@ -86,31 +82,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return {}
 
         if normalized.interaction_type == "command":
-            print(f"[DEBUG] routing command: {normalized.command_name}")
             response = _route_command(normalized)
-            print(f"[DEBUG] command response type: {type(response).__name__}")
         else:
             response = _route_action(normalized)
 
         if normalized.interaction_type == "action":
             # Button clicks: respond synchronously with UPDATE_MESSAGE
             update_response = _renderer.render_update(response)
-            print(f"[DEBUG] action sync response: {json.dumps(update_response, default=str)[:500]}")
             return update_response
         else:
             # Slash commands: post async via Chat REST API, return empty
             # (sync responses don't work with API Gateway v2 + Google Chat)
             space_name = _extract_space_name(body)
             unwrapped = _unwrap_render_actions(response)
-            print(f"[DEBUG] posting async to space={space_name}")
             _post_to_chat(space_name, unwrapped)
-            print(f"[DEBUG] async post complete")
             return {}
 
     except Exception as e:
-        import traceback
-        print(f"[DEBUG] EXCEPTION: {type(e).__name__}: {e}")
-        print(f"[DEBUG] TRACEBACK: {traceback.format_exc()}")
         logger.exception(f"Error handling Google Chat interaction: {e}")
         return {"text": "❌ An error occurred processing your request"}
 
@@ -182,7 +170,7 @@ def _get_sa_json_from_ssm() -> Optional[str]:
         _sa_json_cache = resp["Parameter"]["Value"]
         return _sa_json_cache
     except Exception as e:
-        print(f"[DEBUG] SSM read failed: {e}")
+        logger.error("SSM read failed: %s", e)
         return None
 
 
@@ -190,7 +178,7 @@ def _get_chat_access_token() -> Optional[str]:
     # Try env var first, then SSM
     sa_json_b64 = settings.GOOGLE_CHAT_SERVICE_ACCOUNT_JSON or _get_sa_json_from_ssm()
     if not sa_json_b64:
-        print("[DEBUG] No service account JSON available (env or SSM)")
+        logger.error("No service account JSON available (env or SSM)")
         return None
     try:
         from google.oauth2 import service_account
@@ -201,7 +189,7 @@ def _get_chat_access_token() -> Optional[str]:
         creds.refresh(_SimpleRequest())
         return creds.token
     except Exception as e:
-        print(f"[DEBUG] Failed to get Chat API access token: {e}")
+        logger.error("Failed to get Chat API access token: %s", e)
         return None
 
 

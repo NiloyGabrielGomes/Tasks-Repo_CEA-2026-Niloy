@@ -48,6 +48,5 @@ def _verify_jwt(token: str, audience: str) -> bool:
         id_token.verify_oauth2_token(token, GoogleRequest(), audience=audience)
         return True
     except Exception as e:
-        print(f"[DEBUG] JWT verify failed: {e} | audience={audience}")
-        logger.error(f"Google Chat JWT verification failed: {e}")
+        logger.error("Google Chat JWT verification failed: %s (audience=%s)", e, audience)
         return False
