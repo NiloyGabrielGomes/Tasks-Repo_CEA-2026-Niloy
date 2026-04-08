@@ -6,7 +6,7 @@ from src.adapters.base import UIRenderer
 from src.adapters.normalized import NormalizedInteraction
 from src.models import MealType, WorkLocationType, UserRole
 from src.services.override_service import override_service
-from src.services.meal_service import MEAL_DISPLAY
+from src.services.meal_service import MEAL_DISPLAY, DEFAULT_MEAL_TYPES
 from src.services.location_service import LOCATION_DISPLAY
 from src.services.team_helpers import extract_team_from_roles
 from src.storage.dynamodb import storage as db
@@ -93,7 +93,7 @@ def handle_override_update(
                     meal_type = MealType(meal_param.lower())
                 except ValueError:
                     return renderer.render_error(
-                        f"Unknown meal type: **{meal_param}**. Use `lunch` or `snacks`."
+                        f"Unknown meal type: **{meal_param}**. Use {', '.join(f'`{m.value}`' for m in DEFAULT_MEAL_TYPES)}."
                     )
                 current_is_in = current_state["meals"].get(meal_type, True)
                 new_is_participating = not current_is_in

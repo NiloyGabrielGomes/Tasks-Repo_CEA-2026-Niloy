@@ -37,7 +37,7 @@ class GoogleChatRenderer(UIRenderer):
             })
 
         widgets.append({"textParagraph": {
-            "text": "<i>Use <b>/meal-update lunch</b> or <b>/meal-update snacks</b> to toggle</i>",
+            "text": f"<i>Use {' or '.join(f'<b>/meal-update {m.value}</b>' for m in DEFAULT_MEAL_TYPES)} to toggle</i>",
         }})
 
         return _wrap_card(
