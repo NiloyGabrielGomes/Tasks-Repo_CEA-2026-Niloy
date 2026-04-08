@@ -178,7 +178,10 @@ def handle_override_meal(
         if interaction.user.user_id != actor_id:
             return renderer.render_error("Only the user who initiated the override can use these buttons.")
 
-        target_date = date.fromisoformat(date_str)
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError:
+            return renderer.render_error("Invalid date format in button.")
 
         try:
             meal_type = MealType(meal_type_str)
@@ -244,7 +247,10 @@ def handle_override_location(
         if interaction.user.user_id != actor_id:
             return renderer.render_error("Only the user who initiated the override can use these buttons.")
 
-        target_date = date.fromisoformat(date_str)
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError:
+            return renderer.render_error("Invalid date format in button.")
 
         try:
             location = WorkLocationType(loc_str)
@@ -299,37 +305,42 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     from src.handlers.auth import AuthenticatedUser
 
     renderer = DiscordRenderer()
-    user_dict = event["user"]
-    user = AuthenticatedUser(
-        user_id=user_dict["user_id"],
-        username=user_dict["username"],
-        display_name=user_dict.get("display_name"),
-        role=UserRole(user_dict["role"]),
-        team=user_dict.get("team"),
-        space_id=user_dict.get("space_id", ""),
-        platform_roles=user_dict.get("platform_roles", []),
-        platform=user_dict.get("platform", "discord"),
-    )
 
-    raw_interaction = event.get("interaction", {})
-    dispatch_type = event["dispatch_type"]
+    try:
+        user_dict = event["user"]
+        user = AuthenticatedUser(
+            user_id=user_dict["user_id"],
+            username=user_dict["username"],
+            display_name=user_dict.get("display_name"),
+            role=UserRole(user_dict["role"]),
+            team=user_dict.get("team"),
+            space_id=user_dict.get("space_id", ""),
+            platform_roles=user_dict.get("platform_roles", []),
+            platform=user_dict.get("platform", "discord"),
+        )
 
-    if dispatch_type == "command":
-        options = event.get("options") or _parse_command_options(raw_interaction.get("data", {}))
-        action_id = None
-    else:
-        options = {}
-        action_id = event.get("action_id") or raw_interaction.get("data", {}).get("custom_id")
+        raw_interaction = event.get("interaction", {})
+        dispatch_type = event["dispatch_type"]
 
-    normalized = NormalizedInteraction(
-        platform=user_dict.get("platform", "discord"),
-        interaction_type=dispatch_type,
-        command_name=event.get("command_name"),
-        action_id=action_id,
-        options=options,
-        raw_body=raw_interaction,
-        user=user,
-    )
+        if dispatch_type == "command":
+            options = event.get("options") or _parse_command_options(raw_interaction.get("data", {}))
+            action_id = None
+        else:
+            options = {}
+            action_id = event.get("action_id") or raw_interaction.get("data", {}).get("custom_id")
+
+        normalized = NormalizedInteraction(
+            platform=user_dict.get("platform", "discord"),
+            interaction_type=dispatch_type,
+            command_name=event.get("command_name"),
+            action_id=action_id,
+            options=options,
+            raw_body=raw_interaction,
+            user=user,
+        )
+    except KeyError as e:
+        logger.error("Malformed dispatch event, missing key: %s", e)
+        return renderer.render_error(f"Internal error: missing required field {e}")
 
     if dispatch_type == "command":
         return handle_override_update(normalized, renderer)

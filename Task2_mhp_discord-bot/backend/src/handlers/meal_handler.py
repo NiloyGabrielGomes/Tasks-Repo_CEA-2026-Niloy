@@ -124,27 +124,32 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     from src.handlers.auth import AuthenticatedUser
 
     renderer = DiscordRenderer()
-    user_dict = event["user"]
-    user = AuthenticatedUser(
-        user_id=user_dict["user_id"],
-        username=user_dict["username"],
-        display_name=user_dict.get("display_name"),
-        role=UserRole(user_dict["role"]),
-        team=user_dict.get("team"),
-        space_id=user_dict.get("space_id", ""),
-        platform_roles=user_dict.get("platform_roles", []),
-        platform=user_dict.get("platform", "discord"),
-    )
 
-    normalized = NormalizedInteraction(
-        platform=user_dict.get("platform", "discord"),
-        interaction_type=event["dispatch_type"],
-        command_name=event.get("command_name"),
-        action_id=event.get("action_id") or event.get("interaction", {}).get("data", {}).get("custom_id"),
-        options=event.get("options") or _extract_options_from_raw(event.get("interaction", {})),
-        raw_body=event.get("interaction", {}),
-        user=user,
-    )
+    try:
+        user_dict = event["user"]
+        user = AuthenticatedUser(
+            user_id=user_dict["user_id"],
+            username=user_dict["username"],
+            display_name=user_dict.get("display_name"),
+            role=UserRole(user_dict["role"]),
+            team=user_dict.get("team"),
+            space_id=user_dict.get("space_id", ""),
+            platform_roles=user_dict.get("platform_roles", []),
+            platform=user_dict.get("platform", "discord"),
+        )
+
+        normalized = NormalizedInteraction(
+            platform=user_dict.get("platform", "discord"),
+            interaction_type=event["dispatch_type"],
+            command_name=event.get("command_name"),
+            action_id=event.get("action_id") or event.get("interaction", {}).get("data", {}).get("custom_id"),
+            options=event.get("options") or _extract_options_from_raw(event.get("interaction", {})),
+            raw_body=event.get("interaction", {}),
+            user=user,
+        )
+    except KeyError as e:
+        logger.error("Malformed dispatch event, missing key: %s", e)
+        return renderer.render_error(f"Internal error: missing required field {e}")
 
     if event["dispatch_type"] == "command":
         return handle_meal_update(normalized, renderer)
