@@ -96,7 +96,8 @@ class LocationService:
     def _check_wfh_cap(
         self, discord_id: str, target_date: date
     ) -> tuple[bool, str | None]:
-        cap = settings.WFH_MONTHLY_CAP
+        from src.services.policy_service import get_wfh_monthly_cap
+        cap = get_wfh_monthly_cap()
         if cap <= 0:
             return False, None  # disabled
 

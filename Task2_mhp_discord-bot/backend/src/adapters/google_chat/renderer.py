@@ -224,6 +224,34 @@ class GoogleChatRenderer(UIRenderer):
             sections=sections,
         )
 
+    # ── Policy ────────────────────────────────────────────────────────────────
+
+    def render_policy_view(self, policies: Dict[str, str]) -> Dict[str, Any]:
+        from src.services.policy_service import POLICY_DISPLAY
+        widgets = []
+        for key, value in policies.items():
+            label = POLICY_DISPLAY.get(key, key)
+            widgets.append({"decoratedText": {
+                "text": label,
+                "bottomLabel": value,
+            }})
+        widgets.append({"textParagraph": {
+            "text": "<i>Use <b>/policy set &lt;setting&gt; &lt;value&gt;</b> to update</i>",
+        }})
+        return _wrap_card(
+            card_id="policy_view",
+            title="Policy Settings",
+            subtitle="Current configuration",
+            sections=[{"widgets": widgets}],
+        )
+
+    def render_policy_set_confirmation(
+        self, setting: str, old_value: str, new_value: str,
+    ) -> Dict[str, Any]:
+        from src.services.policy_service import POLICY_DISPLAY
+        label = POLICY_DISPLAY.get(setting, setting)
+        return _render_text(f"✅ **{label}** updated: {old_value} → **{new_value}**")
+
     # ── Utilities ─────────────────────────────────────────────────────────────
 
     def render_success(self, message: str) -> Dict[str, Any]:

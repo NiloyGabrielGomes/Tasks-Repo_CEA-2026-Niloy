@@ -91,6 +91,24 @@ class UIRenderer(ABC):
     ) -> Dict[str, Any]:
         """Return a response payload showing full headcount summary with optional team breakdown."""
 
+    # ── Policy ────────────────────────────────────────────────────────────────
+
+    @abstractmethod
+    def render_policy_view(
+        self,
+        policies: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """Return a response payload showing current policy settings."""
+
+    @abstractmethod
+    def render_policy_set_confirmation(
+        self,
+        setting: str,
+        old_value: str,
+        new_value: str,
+    ) -> Dict[str, Any]:
+        """Return a confirmation payload after a policy update."""
+
     # ── Utilities ─────────────────────────────────────────────────────────────
 
     @abstractmethod
