@@ -218,9 +218,9 @@ Single HTTP API (`trainee-2026-niloy-mhp-api`, API Gateway v2):
 |----------|-------------|---------|
 | `DYNAMODB_TABLE_NAME` | DynamoDB table name | `mhp-dev-data` |
 | `S3_BUCKET` | S3 bucket name | `mhp-dev-reports` |
-| `CUTOFF_TIME` | Meal update cutoff (Dhaka) | `21:00` |
-| `WFH_MONTHLY_CAP` | WFH days per month | `5` |
-| `FORWARD_PLANNING_DAYS` | Max days ahead to book | `7` |
+| `CUTOFF_TIME` | Meal update cutoff (Dhaka) — also configurable via `/policy set` | `21:00` |
+| `WFH_MONTHLY_CAP` | WFH days per month — also configurable via `/policy set` | `5` |
+| `FORWARD_PLANNING_DAYS` | Max days ahead to book — also configurable via `/policy set` | `7` |
 | `TIMEZONE` | timezone | `Asia/Dhaka` |
 | `DEBUG` | Enable debug mode | `false` |
 | `ENABLE_MULTI_LAMBDA` | Route commands to feature Lambdas | `true` |
@@ -388,7 +388,7 @@ class Policy:
 2. **Discord to Lambda** — Discord sends HTTP POST to `POST /discord` API Gateway endpoint
 3. **Signature Verification** — `DiscordVerifier` (Ed25519/PyNaCl) verifies signature (`src/adapters/discord/verifier.py`)
 4. **Authentication** — `DiscordUserResolver` maps Discord role IDs to `AuthenticatedUser` (`src/adapters/discord/auth_adapter.py`)
-5. **Normalization** — `DiscordIngressAdapter.normalize()` builds `NormalizedInteraction` (`src/adapters/discord/ingress_adapter.py`)
+5. **Normalization** — `DiscordIngressAdapter.normalize()` builds `NormalizedInteraction` (`src/adapters/discord/ingress_adapter.py`). Supports subcommands (type 1) — e.g., `/policy set` populates `options["_subcommand"]` with the subcommand name and flattens nested options.
 6. **Authorization** — `check_command_authorization()` enforces role requirements
 7. **Process & Respond** — Handler returns response via `DiscordRenderer` (`src/adapters/discord/renderer.py`)
 
@@ -555,6 +555,7 @@ COMMAND_ROLE_REQUIREMENTS = {
     "headcount-summary": UserRole.ADMIN,
     "override-update": UserRole.ADMIN,
     "generate-summary": UserRole.ADMIN,
+    "policy": UserRole.ADMIN,
 }
 
 def check_command_authorization(command_name: str, user: AuthenticatedUser):
@@ -631,20 +632,22 @@ Employees can view and toggle their meal participation for any eligible date via
 
 ### Meal Types
 
-Default daily meal types:
+Active meal types are configurable at runtime via the `active_meal_types` policy (see [Policy Management](#policy-management)). The default is `["lunch", "snacks"]`.
 
 | Meal Type | Emoji | Default Status |
 |-----------|-------|----------------|
 | Lunch | 🍱 | Opted In |
 | Snacks | 🍕 | Opted In |
 
-Additional types (activated per-date in future issues):
+Additional types (activated via `/policy set active-meal-types`):
 
 | Meal Type | Emoji | Trigger |
 |-----------|-------|--------|
 | Iftar | 🌙 | Ramadan period |
 | Event Dinner | 🎉 | Event meal (Issue #13) |
 | Optional Dinner | 🍽️ | Special occasions |
+
+Admins can activate additional meal types with `/policy set active-meal-types lunch,snacks,iftar`. The change takes effect immediately for all users.
 
 ### Toggle Behavior
 
