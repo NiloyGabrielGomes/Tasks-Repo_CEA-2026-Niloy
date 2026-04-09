@@ -58,12 +58,23 @@ def _parse_command_options(data: Dict[str, Any]) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
 
     for opt in options_list:
-        result[opt["name"]] = opt["value"]
-        if opt.get("type") == 6:  # USER option type
-            user_id_val = opt["value"]
-            if user_id_val in resolved.get("users", {}):
-                result[f"_resolved_user_{opt['name']}"] = resolved["users"][user_id_val]
-            if user_id_val in resolved.get("members", {}):
-                result[f"_resolved_member_{opt['name']}"] = resolved["members"][user_id_val]
+        if opt.get("type") == 1:  # SUB_COMMAND
+            result["_subcommand"] = opt["name"]
+            for sub_opt in opt.get("options", []):
+                result[sub_opt["name"]] = sub_opt["value"]
+                if sub_opt.get("type") == 6:
+                    _resolve_user(sub_opt, resolved, result)
+        else:
+            result[opt["name"]] = opt["value"]
+            if opt.get("type") == 6:  # USER option type
+                _resolve_user(opt, resolved, result)
 
     return result
+
+
+def _resolve_user(opt: Dict[str, Any], resolved: Dict[str, Any], result: Dict[str, Any]) -> None:
+    user_id_val = opt["value"]
+    if user_id_val in resolved.get("users", {}):
+        result[f"_resolved_user_{opt['name']}"] = resolved["users"][user_id_val]
+    if user_id_val in resolved.get("members", {}):
+        result[f"_resolved_member_{opt['name']}"] = resolved["members"][user_id_val]

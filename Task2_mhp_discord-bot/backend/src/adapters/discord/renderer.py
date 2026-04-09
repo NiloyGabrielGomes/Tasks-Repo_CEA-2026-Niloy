@@ -122,6 +122,42 @@ class DiscordRenderer(UIRenderer):
             "data": {"embeds": [embed], "flags": EPHEMERAL_FLAG},
         }
 
+    # ── Policy ────────────────────────────────────────────────────────────────
+
+    def render_policy_view(self, policies: Dict[str, str]) -> Dict[str, Any]:
+        from src.services.policy_service import POLICY_DISPLAY
+        fields = []
+        for key, value in policies.items():
+            label = POLICY_DISPLAY.get(key, key)
+            fields.append({"name": label, "value": f"**{value}**", "inline": True})
+        embed = {
+            "title": "Policy Settings",
+            "fields": fields,
+            "color": 0x5865F2,
+            "footer": {"text": "Use /policy set <setting> <value> to update"},
+        }
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"embeds": [embed], "flags": EPHEMERAL_FLAG},
+        }
+
+    def render_policy_set_confirmation(
+        self, setting: str, old_value: str, new_value: str,
+    ) -> Dict[str, Any]:
+        from src.services.policy_service import POLICY_DISPLAY
+        label = POLICY_DISPLAY.get(setting, setting)
+        embed = {
+            "title": "Policy Updated",
+            "fields": [
+                {"name": label, "value": f"~~{old_value}~~ **{new_value}**"},
+            ],
+            "color": 0x57F287,
+        }
+        return {
+            "type": RESPONSE_CHANNEL_MESSAGE,
+            "data": {"embeds": [embed], "flags": EPHEMERAL_FLAG},
+        }
+
     # ── Utilities ─────────────────────────────────────────────────────────────
 
     def render_success(self, message: str) -> Dict[str, Any]:
