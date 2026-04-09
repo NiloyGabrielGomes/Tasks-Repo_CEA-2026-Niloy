@@ -759,10 +759,11 @@ Same date validation rules as Meal Participation:
 
 ### WFH Monthly Cap
 
-- **Default cap:** 5 days per calendar month (configurable via `WFH_MONTHLY_CAP`)
+- **Default cap:** 5 days per calendar month (configurable via `WFH_MONTHLY_CAP` env var or `/policy set wfh-monthly-cap` — see [Policy Management](#policy-management))
 - **Enforcement:** Soft limit — rejects the switch to WFH when at/over cap
 - **Counting:** Counts WFH records for the same user in the same calendar month, excluding the date being set (to allow toggling back to Office)
 - **Cap = 0:** Disables the cap check entirely
+- **Runtime priority:** DynamoDB policy value takes precedence over env var default
 
 ### Location Types
 
@@ -1002,6 +1003,132 @@ Responses are ephemeral embeds (`flags: 64`):
 - Footer widget: `👥 Total responding: N`
 
 **`/headcount-summary`** — multi-section card; overall counts in the first section, each team in its own section with a `header` showing the team name.
+
+---
+
+## Policy Management
+
+### Overview
+
+Issue #14 introduced runtime-configurable operational policies. Before this change, values like cutoff time and WFH cap were hardcoded as Lambda environment variables. Now admins can view and update these settings at runtime via the `/policy` command, with values stored in DynamoDB and read dynamically by all Lambdas.
+
+### Architecture
+
+```
+/policy view → policy_handler.handle_policy_view()
+                  → policy_service.get_all_policies()
+                      → DynamoDB GetItem per key (with in-memory cache)
+                  → renderer.render_policy_view()
+
+/policy set setting:X value:Y → policy_handler.handle_policy_set()
+                                    → validate_policy_value(setting, value)
+                                    → policy_service.set_policy(setting, value)
+                                        → DynamoDB PutItem + cache invalidation
+                                    → renderer.render_policy_set_confirmation()
+```
+
+### Policy Service (`src/services/policy_service.py`)
+
+Centralized policy read/write with in-memory per-key caching. Falls back to `settings.*` env var defaults when no DynamoDB policy exists.
+
+**Typed accessors:**
+
+| Function | Returns | Fallback Default |
+|----------|---------|------------------|
+| `get_cutoff_time()` | `str` (HH:MM) | `settings.CUTOFF_TIME` (`"21:00"`) |
+| `get_wfh_monthly_cap()` | `int` | `settings.WFH_MONTHLY_CAP` (`5`) |
+| `get_forward_planning_days()` | `int` | `settings.FORWARD_PLANNING_DAYS` (`7`) |
+| `get_active_meal_types()` | `list[MealType]` | `["lunch", "snacks"]` |
+
+**Additional functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `get_all_policies()` | Returns dict of all policy names → current values (for `/policy view`) |
+| `set_policy(name, value)` | Writes to DynamoDB + invalidates cache |
+| `invalidate_cache(name=None)` | Clears one or all cached entries |
+| `validate_policy_value(name, value)` | Input validation per policy type |
+
+**Caching:** Each policy key is cached independently in memory after first read. Cache is invalidated on write via `set_policy()`. Lambda cold starts begin with an empty cache.
+
+### Policy Keys
+
+| Policy Name | DynamoDB Key | Value Format | Validation |
+|-------------|-------------|--------------|------------|
+| `cutoff_time` | `POLICY#cutoff_time` | `"22:00"` (HH:MM) | Valid time, 0-23h, 0-59m |
+| `wfh_monthly_cap` | `POLICY#wfh_monthly_cap` | `"5"` (int as string) | Non-negative integer |
+| `forward_planning_days` | `POLICY#forward_planning_days` | `"7"` (int as string) | Integer 1-30 |
+| `active_meal_types` | `POLICY#active_meal_types` | `'["lunch","snacks"]'` (JSON array) | Valid MealType values |
+
+### Where Policies Are Consumed
+
+| Consumer | Policy | Before (env var) | After (policy service) |
+|----------|--------|-------------------|----------------------|
+| `src/utils.py` — `validate_date_for_update()` | `cutoff_time` | `settings.CUTOFF_TIME` | `get_cutoff_time()` |
+| `src/utils.py` — `validate_date_for_update()` | `forward_planning_days` | `settings.FORWARD_PLANNING_DAYS` | `get_forward_planning_days()` |
+| `src/services/location_service.py` — `_check_wfh_cap()` | `wfh_monthly_cap` | `settings.WFH_MONTHLY_CAP` | `get_wfh_monthly_cap()` |
+| `src/services/meal_service.py` — `get_available_meal_types()` | `active_meal_types` | Hardcoded `DEFAULT_MEAL_TYPES` | `get_active_meal_types()` |
+
+### Commands
+
+#### `/policy view`
+
+```
+/policy view
+```
+
+- **Access** — Admin only (`UserRole.ADMIN`)
+- **Response** — Ephemeral embed (Discord) or card (Google Chat) showing all 4 policy settings with their current values
+
+#### `/policy set`
+
+```
+/policy set setting:<name> value:<value>
+```
+
+- **Access** — Admin only (`UserRole.ADMIN`)
+- **Options:**
+  - `setting` (required) — One of: `cutoff_time`, `wfh_monthly_cap`, `forward_planning_days`, `active_meal_types`
+  - `value` (required) — New value for the setting
+- **Validation** — Per-type validation (see Policy Keys table above). Invalid values return an error message.
+- **Response** — Confirmation embed showing old → new value
+
+#### Discord Subcommand Format
+
+Discord sends `/policy set setting:x value:y` as a nested subcommand structure:
+
+```json
+{"options": [{"name": "set", "type": 1, "options": [{"name": "setting", "value": "x"}, {"name": "value", "value": "y"}]}]}
+```
+
+`DiscordIngressAdapter._parse_command_options()` handles type 1 (subcommand) options by setting `options["_subcommand"] = "set"` and flattening the nested options into the top-level dict.
+
+#### Google Chat Format
+
+```
+/policy view
+/policy set cutoff-time 22:00
+/policy set active-meal-types lunch,snacks,iftar
+```
+
+Hyphens in setting names are normalized to underscores by the handler.
+
+### Handler (`src/handlers/policy_handler.py`)
+
+```python
+def handle_policy(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+def handle_policy_view(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+def handle_policy_set(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+```
+
+`handle_policy()` dispatches to view or set based on `interaction.options.get("_subcommand")` (Discord) or `interaction.options.get("_args")` (Google Chat).
+
+### Renderer Methods
+
+| Method | Discord | Google Chat |
+|--------|---------|-------------|
+| `render_policy_view(policies)` | Embed with inline fields per setting, blurple color, ephemeral | Card with `decoratedText` widgets per setting |
+| `render_policy_set_confirmation(setting, old, new)` | Green embed showing `~~old~~ → **new**` | Text-based confirmation message |
 
 ---
 
