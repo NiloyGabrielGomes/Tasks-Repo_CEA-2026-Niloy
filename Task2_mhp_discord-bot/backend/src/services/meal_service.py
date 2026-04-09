@@ -31,7 +31,8 @@ class MealService:
         self.storage = storage or default_storage
 
     def get_available_meal_types(self) -> list[MealType]:
-        return list(DEFAULT_MEAL_TYPES)
+        from src.services.policy_service import get_active_meal_types
+        return get_active_meal_types()
 
     def get_user_meals_for_date(
         self, discord_id: str, target_date: date
