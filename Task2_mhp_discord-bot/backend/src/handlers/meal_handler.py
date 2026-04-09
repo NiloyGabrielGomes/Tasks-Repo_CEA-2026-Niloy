@@ -6,7 +6,7 @@ from typing import Any, Dict
 from src.adapters.base import UIRenderer
 from src.adapters.normalized import NormalizedInteraction
 from src.models import MealType, UserRole
-from src.services.meal_service import meal_service, MEAL_DISPLAY
+from src.services.meal_service import meal_service, MEAL_DISPLAY, DEFAULT_MEAL_TYPES
 from src.utils import parse_date_option, validate_date_for_update
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def handle_meal_update(
                 meal_type = MealType(meal_arg)
             except ValueError:
                 return renderer.render_error(
-                    f"Unknown meal type: **{meal_arg}**. Use `lunch` or `snacks`."
+                    f"Unknown meal type: **{meal_arg}**. Use {', '.join(f'`{m.value}`' for m in DEFAULT_MEAL_TYPES)}."
                 )
             success, result = meal_service.toggle_meal_participation(
                 discord_id=interaction.user.user_id,

@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.8.0
-> **Last Updated:** 2026-03-21
-> **Status:** Issue #6 Complete — Headcount View & Reporting
-> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #6, #18, #19, #20, #21
+> **Version:** 1.9.0
+> **Last Updated:** 2026-04-09
+> **Status:** Issue #14 Complete — Policy Refinements
+> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #6, #14, #18, #19, #20, #21
 
 ---
 
@@ -25,8 +25,9 @@
 10. [Work Location](#work-location)
 11. [Override Update](#override-update)
 12. [Headcount View & Reporting](#headcount-view--reporting)
-13. [Security](#security)
-14. [Future Enhancements](#future-enhancements)
+13. [Policy Management](#policy-management)
+14. [Security](#security)
+15. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -99,7 +100,7 @@ Issue #18 introduced a platform-agnostic adapter layer so the same business logi
 |-----------|---------------|
 | `InteractionVerifier` | Platform-specific request authentication (`verify`, `extract_body`) |
 | `UserResolver` | Maps platform identity to `AuthenticatedUser` (`resolve`) |
-| `UIRenderer` | Produces platform-specific response payloads (`render_meal_status`, `render_location_status`, `render_override_status`, `render_team_summary`, `render_headcount_summary`, `render_error`, `render_update`) |
+| `UIRenderer` | Produces platform-specific response payloads (`render_meal_status`, `render_location_status`, `render_override_status`, `render_team_summary`, `render_headcount_summary`, `render_policy_view`, `render_policy_set_confirmation`, `render_error`, `render_update`) |
 
 ### Normalized Interaction Bridge (`src/adapters/normalized.py`)
 
@@ -217,9 +218,9 @@ Single HTTP API (`trainee-2026-niloy-mhp-api`, API Gateway v2):
 |----------|-------------|---------|
 | `DYNAMODB_TABLE_NAME` | DynamoDB table name | `mhp-dev-data` |
 | `S3_BUCKET` | S3 bucket name | `mhp-dev-reports` |
-| `CUTOFF_TIME` | Meal update cutoff (Dhaka) | `21:00` |
-| `WFH_MONTHLY_CAP` | WFH days per month | `5` |
-| `FORWARD_PLANNING_DAYS` | Max days ahead to book | `7` |
+| `CUTOFF_TIME` | Meal update cutoff (Dhaka) — also configurable via `/policy set` | `21:00` |
+| `WFH_MONTHLY_CAP` | WFH days per month — also configurable via `/policy set` | `5` |
+| `FORWARD_PLANNING_DAYS` | Max days ahead to book — also configurable via `/policy set` | `7` |
 | `TIMEZONE` | timezone | `Asia/Dhaka` |
 | `DEBUG` | Enable debug mode | `false` |
 | `ENABLE_MULTI_LAMBDA` | Route commands to feature Lambdas | `true` |
@@ -387,7 +388,7 @@ class Policy:
 2. **Discord to Lambda** — Discord sends HTTP POST to `POST /discord` API Gateway endpoint
 3. **Signature Verification** — `DiscordVerifier` (Ed25519/PyNaCl) verifies signature (`src/adapters/discord/verifier.py`)
 4. **Authentication** — `DiscordUserResolver` maps Discord role IDs to `AuthenticatedUser` (`src/adapters/discord/auth_adapter.py`)
-5. **Normalization** — `DiscordIngressAdapter.normalize()` builds `NormalizedInteraction` (`src/adapters/discord/ingress_adapter.py`)
+5. **Normalization** — `DiscordIngressAdapter.normalize()` builds `NormalizedInteraction` (`src/adapters/discord/ingress_adapter.py`). Supports subcommands (type 1) — e.g., `/policy set` populates `options["_subcommand"]` with the subcommand name and flattens nested options.
 6. **Authorization** — `check_command_authorization()` enforces role requirements
 7. **Process & Respond** — Handler returns response via `DiscordRenderer` (`src/adapters/discord/renderer.py`)
 
@@ -554,6 +555,7 @@ COMMAND_ROLE_REQUIREMENTS = {
     "headcount-summary": UserRole.ADMIN,
     "override-update": UserRole.ADMIN,
     "generate-summary": UserRole.ADMIN,
+    "policy": UserRole.ADMIN,
 }
 
 def check_command_authorization(command_name: str, user: AuthenticatedUser):
@@ -630,20 +632,22 @@ Employees can view and toggle their meal participation for any eligible date via
 
 ### Meal Types
 
-Default daily meal types:
+Active meal types are configurable at runtime via the `active_meal_types` policy (see [Policy Management](#policy-management)). The default is `["lunch", "snacks"]`.
 
 | Meal Type | Emoji | Default Status |
 |-----------|-------|----------------|
 | Lunch | 🍱 | Opted In |
 | Snacks | 🍕 | Opted In |
 
-Additional types (activated per-date in future issues):
+Additional types (activated via `/policy set active-meal-types`):
 
 | Meal Type | Emoji | Trigger |
 |-----------|-------|--------|
 | Iftar | 🌙 | Ramadan period |
 | Event Dinner | 🎉 | Event meal (Issue #13) |
 | Optional Dinner | 🍽️ | Special occasions |
+
+Admins can activate additional meal types with `/policy set active-meal-types lunch,snacks,iftar`. The change takes effect immediately for all users.
 
 ### Toggle Behavior
 
@@ -755,10 +759,11 @@ Same date validation rules as Meal Participation:
 
 ### WFH Monthly Cap
 
-- **Default cap:** 5 days per calendar month (configurable via `WFH_MONTHLY_CAP`)
+- **Default cap:** 5 days per calendar month (configurable via `WFH_MONTHLY_CAP` env var or `/policy set wfh-monthly-cap` — see [Policy Management](#policy-management))
 - **Enforcement:** Soft limit — rejects the switch to WFH when at/over cap
 - **Counting:** Counts WFH records for the same user in the same calendar month, excluding the date being set (to allow toggling back to Office)
 - **Cap = 0:** Disables the cap check entirely
+- **Runtime priority:** DynamoDB policy value takes precedence over env var default
 
 ### Location Types
 
@@ -998,6 +1003,132 @@ Responses are ephemeral embeds (`flags: 64`):
 - Footer widget: `👥 Total responding: N`
 
 **`/headcount-summary`** — multi-section card; overall counts in the first section, each team in its own section with a `header` showing the team name.
+
+---
+
+## Policy Management
+
+### Overview
+
+Issue #14 introduced runtime-configurable operational policies. Before this change, values like cutoff time and WFH cap were hardcoded as Lambda environment variables. Now admins can view and update these settings at runtime via the `/policy` command, with values stored in DynamoDB and read dynamically by all Lambdas.
+
+### Architecture
+
+```
+/policy view → policy_handler.handle_policy_view()
+                  → policy_service.get_all_policies()
+                      → DynamoDB GetItem per key (with in-memory cache)
+                  → renderer.render_policy_view()
+
+/policy set setting:X value:Y → policy_handler.handle_policy_set()
+                                    → validate_policy_value(setting, value)
+                                    → policy_service.set_policy(setting, value)
+                                        → DynamoDB PutItem + cache invalidation
+                                    → renderer.render_policy_set_confirmation()
+```
+
+### Policy Service (`src/services/policy_service.py`)
+
+Centralized policy read/write with in-memory per-key caching. Falls back to `settings.*` env var defaults when no DynamoDB policy exists.
+
+**Typed accessors:**
+
+| Function | Returns | Fallback Default |
+|----------|---------|------------------|
+| `get_cutoff_time()` | `str` (HH:MM) | `settings.CUTOFF_TIME` (`"21:00"`) |
+| `get_wfh_monthly_cap()` | `int` | `settings.WFH_MONTHLY_CAP` (`5`) |
+| `get_forward_planning_days()` | `int` | `settings.FORWARD_PLANNING_DAYS` (`7`) |
+| `get_active_meal_types()` | `list[MealType]` | `["lunch", "snacks"]` |
+
+**Additional functions:**
+
+| Function | Purpose |
+|----------|---------|
+| `get_all_policies()` | Returns dict of all policy names → current values (for `/policy view`) |
+| `set_policy(name, value)` | Writes to DynamoDB + invalidates cache |
+| `invalidate_cache(name=None)` | Clears one or all cached entries |
+| `validate_policy_value(name, value)` | Input validation per policy type |
+
+**Caching:** Each policy key is cached independently in memory after first read. Cache is invalidated on write via `set_policy()`. Lambda cold starts begin with an empty cache.
+
+### Policy Keys
+
+| Policy Name | DynamoDB Key | Value Format | Validation |
+|-------------|-------------|--------------|------------|
+| `cutoff_time` | `POLICY#cutoff_time` | `"22:00"` (HH:MM) | Valid time, 0-23h, 0-59m |
+| `wfh_monthly_cap` | `POLICY#wfh_monthly_cap` | `"5"` (int as string) | Non-negative integer |
+| `forward_planning_days` | `POLICY#forward_planning_days` | `"7"` (int as string) | Integer 1-30 |
+| `active_meal_types` | `POLICY#active_meal_types` | `'["lunch","snacks"]'` (JSON array) | Valid MealType values |
+
+### Where Policies Are Consumed
+
+| Consumer | Policy | Before (env var) | After (policy service) |
+|----------|--------|-------------------|----------------------|
+| `src/utils.py` — `validate_date_for_update()` | `cutoff_time` | `settings.CUTOFF_TIME` | `get_cutoff_time()` |
+| `src/utils.py` — `validate_date_for_update()` | `forward_planning_days` | `settings.FORWARD_PLANNING_DAYS` | `get_forward_planning_days()` |
+| `src/services/location_service.py` — `_check_wfh_cap()` | `wfh_monthly_cap` | `settings.WFH_MONTHLY_CAP` | `get_wfh_monthly_cap()` |
+| `src/services/meal_service.py` — `get_available_meal_types()` | `active_meal_types` | Hardcoded `DEFAULT_MEAL_TYPES` | `get_active_meal_types()` |
+
+### Commands
+
+#### `/policy view`
+
+```
+/policy view
+```
+
+- **Access** — Admin only (`UserRole.ADMIN`)
+- **Response** — Ephemeral embed (Discord) or card (Google Chat) showing all 4 policy settings with their current values
+
+#### `/policy set`
+
+```
+/policy set setting:<name> value:<value>
+```
+
+- **Access** — Admin only (`UserRole.ADMIN`)
+- **Options:**
+  - `setting` (required) — One of: `cutoff_time`, `wfh_monthly_cap`, `forward_planning_days`, `active_meal_types`
+  - `value` (required) — New value for the setting
+- **Validation** — Per-type validation (see Policy Keys table above). Invalid values return an error message.
+- **Response** — Confirmation embed showing old → new value
+
+#### Discord Subcommand Format
+
+Discord sends `/policy set setting:x value:y` as a nested subcommand structure:
+
+```json
+{"options": [{"name": "set", "type": 1, "options": [{"name": "setting", "value": "x"}, {"name": "value", "value": "y"}]}]}
+```
+
+`DiscordIngressAdapter._parse_command_options()` handles type 1 (subcommand) options by setting `options["_subcommand"] = "set"` and flattening the nested options into the top-level dict.
+
+#### Google Chat Format
+
+```
+/policy view
+/policy set cutoff-time 22:00
+/policy set active-meal-types lunch,snacks,iftar
+```
+
+Hyphens in setting names are normalized to underscores by the handler.
+
+### Handler (`src/handlers/policy_handler.py`)
+
+```python
+def handle_policy(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+def handle_policy_view(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+def handle_policy_set(interaction: NormalizedInteraction, renderer: UIRenderer) -> Dict: ...
+```
+
+`handle_policy()` dispatches to view or set based on `interaction.options.get("_subcommand")` (Discord) or `interaction.options.get("_args")` (Google Chat).
+
+### Renderer Methods
+
+| Method | Discord | Google Chat |
+|--------|---------|-------------|
+| `render_policy_view(policies)` | Embed with inline fields per setting, blurple color, ephemeral | Card with `decoratedText` widgets per setting |
+| `render_policy_set_confirmation(setting, old, new)` | Green embed showing `~~old~~ → **new**` | Text-based confirmation message |
 
 ---
 
