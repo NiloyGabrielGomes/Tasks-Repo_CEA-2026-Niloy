@@ -59,6 +59,7 @@ COMMAND_ROLE_REQUIREMENTS = {
     "headcount-summary": UserRole.ADMIN,
     "override-update": UserRole.TEAM_LEAD,
     "generate-summary": UserRole.ADMIN,
+    "policy": UserRole.ADMIN,
 }
 
 
