@@ -31,6 +31,7 @@ from src.handlers.override_handler import (
 )
 from src.handlers.link_handler import handle_link_identity
 from src.handlers.headcount_handler import handle_team_summary, handle_headcount_summary
+from src.handlers.policy_handler import handle_policy
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,8 @@ def _route_command(normalized) -> Dict[str, Any]:
         return handle_team_summary(normalized, _renderer)
     if cmd == "headcount-summary":
         return handle_headcount_summary(normalized, _renderer)
+    if cmd == "policy":
+        return handle_policy(normalized, _renderer)
     return _renderer.render_error(f"Unknown command: `{cmd}`")
 
 

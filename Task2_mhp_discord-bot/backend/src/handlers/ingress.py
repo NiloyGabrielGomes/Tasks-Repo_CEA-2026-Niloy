@@ -28,6 +28,7 @@ from src.handlers.override_handler import (
 )
 from src.handlers.link_handler import handle_link_identity
 from src.handlers.headcount_handler import handle_team_summary, handle_headcount_summary
+from src.handlers.policy_handler import handle_policy
 from src.handlers import dispatcher
 from src.config import settings
 
@@ -86,6 +87,8 @@ def _route_inprocess(normalized, interaction_type: int) -> Dict[str, Any]:
             return handle_team_summary(normalized, _renderer)
         if cmd == "headcount-summary":
             return handle_headcount_summary(normalized, _renderer)
+        if cmd == "policy":
+            return handle_policy(normalized, _renderer)
         return {
             "type": RESPONSE_CHANNEL_MESSAGE,
             "data": {
