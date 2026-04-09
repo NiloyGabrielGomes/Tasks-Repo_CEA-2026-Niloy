@@ -51,7 +51,8 @@ def _parse_cutoff_time(raw: str) -> tuple[int, int]:
 
 
 def get_cutoff_datetime(target_date: date) -> datetime:
-    hour, minute = _parse_cutoff_time(settings.CUTOFF_TIME)
+    from src.services.policy_service import get_cutoff_time
+    hour, minute = _parse_cutoff_time(get_cutoff_time())
     return datetime(
         target_date.year, target_date.month, target_date.day,
         hour, minute, 0,
@@ -71,7 +72,8 @@ def is_past_date(target_date: date) -> bool:
 
 def is_within_forward_window(target_date: date) -> bool:
     today = get_dhaka_today()
-    max_date = today + timedelta(days=settings.FORWARD_PLANNING_DAYS)
+    from src.services.policy_service import get_forward_planning_days
+    max_date = today + timedelta(days=get_forward_planning_days())
     return target_date <= max_date
 
 def validate_date_for_update(target_date: date) -> tuple[bool, str | None]:
@@ -81,13 +83,13 @@ def validate_date_for_update(target_date: date) -> tuple[bool, str | None]:
     if is_past_cutoff(target_date):
         return False, (
             f"Updates for {target_date.isoformat()} are closed. "
-            f"The cutoff time is {settings.CUTOFF_TIME} (Asia/Dhaka)."
+            f"The cutoff time is {get_cutoff_time()} (Asia/Dhaka)."
         )
 
     if not is_within_forward_window(target_date):
         return False, (
-            f"Cannot update dates more than {settings.FORWARD_PLANNING_DAYS} days ahead. "
-            f"Maximum allowed date: {(get_dhaka_today() + timedelta(days=settings.FORWARD_PLANNING_DAYS)).isoformat()}."
+            f"Cannot update dates more than {get_forward_planning_days()} days ahead. "
+            f"Maximum allowed date: {(get_dhaka_today() + timedelta(days=get_forward_planning_days())).isoformat()}."
         )
 
     return True, None
