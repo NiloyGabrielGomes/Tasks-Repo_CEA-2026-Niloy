@@ -1,9 +1,9 @@
 # MHP Discord Bot — Technical Documentation
 
-> **Version:** 1.8.0
-> **Last Updated:** 2026-03-21
-> **Status:** Issue #6 Complete — Headcount View & Reporting
-> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #6, #18, #19, #20, #21
+> **Version:** 1.9.0
+> **Last Updated:** 2026-04-09
+> **Status:** Issue #14 Complete — Policy Refinements
+> **Addressed Issues (Prefix 2.x):** #1, #2, #3, #4, #5, #6, #14, #18, #19, #20, #21
 
 ---
 
@@ -25,8 +25,9 @@
 10. [Work Location](#work-location)
 11. [Override Update](#override-update)
 12. [Headcount View & Reporting](#headcount-view--reporting)
-13. [Security](#security)
-14. [Future Enhancements](#future-enhancements)
+13. [Policy Management](#policy-management)
+14. [Security](#security)
+15. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -99,7 +100,7 @@ Issue #18 introduced a platform-agnostic adapter layer so the same business logi
 |-----------|---------------|
 | `InteractionVerifier` | Platform-specific request authentication (`verify`, `extract_body`) |
 | `UserResolver` | Maps platform identity to `AuthenticatedUser` (`resolve`) |
-| `UIRenderer` | Produces platform-specific response payloads (`render_meal_status`, `render_location_status`, `render_override_status`, `render_team_summary`, `render_headcount_summary`, `render_error`, `render_update`) |
+| `UIRenderer` | Produces platform-specific response payloads (`render_meal_status`, `render_location_status`, `render_override_status`, `render_team_summary`, `render_headcount_summary`, `render_policy_view`, `render_policy_set_confirmation`, `render_error`, `render_update`) |
 
 ### Normalized Interaction Bridge (`src/adapters/normalized.py`)
 
