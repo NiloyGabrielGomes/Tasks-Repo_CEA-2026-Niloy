@@ -17,13 +17,13 @@ terraform {
   }
 
   # Remote state backend — uncomment and configure for Jenkins use.
-  # backend "s3" {
-  #   bucket         = "trainee-2026-niloy-mhp-tfstate"
-  #   key            = "mhp-backend/terraform.tfstate"
-  #   region         = "ap-south-1"
-  #   dynamodb_table = "trainee-2026-niloy-mhp-tflock"
-  #   encrypt        = true
-  # }
+   backend "s3" {
+     bucket         = "trainee-2026-niloy-mhp-tfstate"
+     key            = "mhp-backend/terraform.tfstate"
+     region         = "ap-south-1"
+     dynamodb_table = "trainee-2026-niloy-mhp-tflock"
+     encrypt        = true
+   }
 }
 
 provider "aws" {
