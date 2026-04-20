@@ -1,0 +1,10 @@
+services:
+  jenkins:
+    build: .
+    container_name: jenkins-mhp
+    restart: unless-stopped
+    user: root
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./jenkins_home:/var/jenkins_home
