@@ -1,0 +1,29 @@
+# Copy to terraform.tfvars and fill in values. terraform.tfvars is gitignored.
+# Values mirror samconfig.toml parameter_overrides.
+
+aws_region  = "ap-south-1"
+name_prefix = "trainee-2026-niloy-mhp"
+
+# Discord
+discord_public_key     = "REPLACE_ME"
+discord_application_id = "REPLACE_ME"
+discord_bot_token      = "REPLACE_ME"
+discord_guild_id       = "REPLACE_ME"
+role_admin_id          = ""
+role_team_lead_id      = ""
+
+# AWS data stores (must exist beforehand)
+dynamodb_table_name = "trainee-2026-niloy-mhp-data"
+s3_bucket_name      = "trainee-2026-niloy-mhp-reports"
+
+# Google Chat
+enable_google_chat               = "true"
+google_chat_audience             = ""  # set to https://<api-id>.execute-api.<region>.amazonaws.com/prod/google-chat after first apply
+google_chat_service_account_json = ""  # base64-encoded; upload to SSM separately
+
+# Lambda policy defaults (overridable at runtime via /policy set)
+cutoff_time           = "21:00"
+wfh_monthly_cap       = "5"
+forward_planning_days = "7"
+timezone              = "Asia/Dhaka"
+enable_multi_lambda   = "true"

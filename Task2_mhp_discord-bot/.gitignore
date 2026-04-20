@@ -37,7 +37,6 @@ backend/deployment.zip
 .aws-sam/
 samconfig.toml
 layer/
-Makefile
 
 # Data files (JSON storage & SQLite)
 backend/data/*.json

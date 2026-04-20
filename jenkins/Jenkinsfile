@@ -1,0 +1,69 @@
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    timeout(time: 30, unit: 'MINUTES')
+  }
+
+  environment {
+    TF_IN_AUTOMATION   = 'true'
+    TF_INPUT           = 'false'
+    AWS_DEFAULT_REGION = 'ap-south-1'
+    TF_DIR             = 'Task2_mhp_discord-bot/backend/infrastructure/terraform'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Plan') {
+      steps {
+        withCredentials([
+          usernamePassword(credentialsId: 'aws-mhp-deploy',
+                           usernameVariable: 'AWS_ACCESS_KEY_ID',
+                           passwordVariable: 'AWS_SECRET_ACCESS_KEY'),
+          string(credentialsId: 'discord-public-key',     variable: 'TF_VAR_discord_public_key'),
+          string(credentialsId: 'discord-bot-token',      variable: 'TF_VAR_discord_bot_token'),
+          string(credentialsId: 'discord-application-id', variable: 'TF_VAR_discord_application_id'),
+          string(credentialsId: 'discord-guild-id',       variable: 'TF_VAR_discord_guild_id'),
+          string(credentialsId: 'role-admin-id',          variable: 'TF_VAR_role_admin_id'),
+          string(credentialsId: 'role-team-lead-id',      variable: 'TF_VAR_role_team_lead_id'),
+        ]) {
+          dir(env.TF_DIR) {
+            sh '''
+              terraform init -input=false
+              terraform validate
+              terraform plan \
+                -var="dynamodb_table_name=trainee-2026-niloy-mhp-data" \
+                -var="s3_bucket_name=trainee-2026-niloy-mhp-reports" \
+                -out=tfplan
+            '''
+          }
+        }
+      }
+    }
+
+    stage('Approve') {
+      steps {
+        input message: 'Apply this plan?', ok: 'Apply'
+      }
+    }
+
+    stage('Apply') {
+      steps {
+        withCredentials([
+          usernamePassword(credentialsId: 'aws-mhp-deploy',
+                           usernameVariable: 'AWS_ACCESS_KEY_ID',
+                           passwordVariable: 'AWS_SECRET_ACCESS_KEY')
+        ]) {
+          dir(env.TF_DIR) {
+            sh 'terraform apply -input=false tfplan'
+          }
+        }
+      }
+    }
+  }
+}
