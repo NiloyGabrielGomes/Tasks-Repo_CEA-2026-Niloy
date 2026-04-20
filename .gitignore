@@ -2,4 +2,6 @@
 plans/
 .claude/
 CLAUDE.md
-jenkins/
+jenkins/jenkins_home/
+AGENTS.md
+.github/agents
