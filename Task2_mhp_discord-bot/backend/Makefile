@@ -9,52 +9,7 @@
 
 SHELL := bash
 
-.PHONY: build-MealFunction build-LocationFunction build-OverrideFunction \
-        build-HeadcountFunction build-InteractionFunction build-GoogleChatFunction
-
-# ── Feature Lambdas ──────────────────────────────────────────────────────────
-# Each target copies: shared src files + its own handler + its own service(s).
-# The Google Chat adapter is intentionally excluded from feature Lambdas.
-
-build-MealFunction:
-	mkdir -p $(ARTIFACTS_DIR)/src/handlers $(ARTIFACTS_DIR)/src/services $(ARTIFACTS_DIR)/src/adapters
-	cp src/__init__.py src/models.py src/config.py src/utils.py $(ARTIFACTS_DIR)/src/
-	cp -r src/storage $(ARTIFACTS_DIR)/src/
-	cp src/adapters/__init__.py src/adapters/base.py src/adapters/normalized.py $(ARTIFACTS_DIR)/src/adapters/
-	cp -r src/adapters/discord $(ARTIFACTS_DIR)/src/adapters/
-	cp src/services/__init__.py src/services/discord_helpers.py src/services/team_helpers.py src/services/policy_service.py $(ARTIFACTS_DIR)/src/services/
-	cp src/handlers/auth.py src/handlers/meal_handler.py $(ARTIFACTS_DIR)/src/handlers/
-	cp src/services/meal_service.py src/services/location_service.py $(ARTIFACTS_DIR)/src/services/
-
-build-LocationFunction:
-	mkdir -p $(ARTIFACTS_DIR)/src/handlers $(ARTIFACTS_DIR)/src/services $(ARTIFACTS_DIR)/src/adapters
-	cp src/__init__.py src/models.py src/config.py src/utils.py $(ARTIFACTS_DIR)/src/
-	cp -r src/storage $(ARTIFACTS_DIR)/src/
-	cp src/adapters/__init__.py src/adapters/base.py src/adapters/normalized.py $(ARTIFACTS_DIR)/src/adapters/
-	cp -r src/adapters/discord $(ARTIFACTS_DIR)/src/adapters/
-	cp src/services/__init__.py src/services/discord_helpers.py src/services/team_helpers.py src/services/policy_service.py $(ARTIFACTS_DIR)/src/services/
-	cp src/handlers/auth.py src/handlers/location_handler.py $(ARTIFACTS_DIR)/src/handlers/
-	cp src/services/meal_service.py src/services/location_service.py $(ARTIFACTS_DIR)/src/services/
-
-build-OverrideFunction:
-	mkdir -p $(ARTIFACTS_DIR)/src/handlers $(ARTIFACTS_DIR)/src/services $(ARTIFACTS_DIR)/src/adapters
-	cp src/__init__.py src/models.py src/config.py src/utils.py $(ARTIFACTS_DIR)/src/
-	cp -r src/storage $(ARTIFACTS_DIR)/src/
-	cp src/adapters/__init__.py src/adapters/base.py src/adapters/normalized.py $(ARTIFACTS_DIR)/src/adapters/
-	cp -r src/adapters/discord $(ARTIFACTS_DIR)/src/adapters/
-	cp src/services/__init__.py src/services/discord_helpers.py src/services/team_helpers.py src/services/policy_service.py $(ARTIFACTS_DIR)/src/services/
-	cp src/handlers/auth.py src/handlers/override_handler.py $(ARTIFACTS_DIR)/src/handlers/
-	cp src/services/meal_service.py src/services/location_service.py src/services/override_service.py $(ARTIFACTS_DIR)/src/services/
-
-build-HeadcountFunction:
-	mkdir -p $(ARTIFACTS_DIR)/src/handlers $(ARTIFACTS_DIR)/src/services $(ARTIFACTS_DIR)/src/adapters
-	cp src/__init__.py src/models.py src/config.py src/utils.py $(ARTIFACTS_DIR)/src/
-	cp -r src/storage $(ARTIFACTS_DIR)/src/
-	cp src/adapters/__init__.py src/adapters/base.py src/adapters/normalized.py $(ARTIFACTS_DIR)/src/adapters/
-	cp -r src/adapters/discord $(ARTIFACTS_DIR)/src/adapters/
-	cp src/services/__init__.py src/services/discord_helpers.py src/services/team_helpers.py src/services/policy_service.py $(ARTIFACTS_DIR)/src/services/
-	cp src/handlers/auth.py src/handlers/headcount_handler.py $(ARTIFACTS_DIR)/src/handlers/
-	cp src/services/meal_service.py src/services/location_service.py src/services/headcount_service.py $(ARTIFACTS_DIR)/src/services/
+.PHONY: build-InteractionFunction build-GoogleChatFunction build-DiscordAuthorizerFunction
 
 # ── Ingress Lambdas ───────────────────────────────────────────────────────────
 # Both route every command in-process and need the full src/ tree.
@@ -64,3 +19,8 @@ build-InteractionFunction:
 
 build-GoogleChatFunction:
 	cp -r src $(ARTIFACTS_DIR)/
+
+build-DiscordAuthorizerFunction:
+	mkdir -p $(ARTIFACTS_DIR)/src/handlers
+	cp src/__init__.py $(ARTIFACTS_DIR)/src/
+	cp src/handlers/discord_authorizer.py $(ARTIFACTS_DIR)/src/handlers/
