@@ -29,8 +29,6 @@ from src.handlers.override_handler import (
 from src.handlers.link_handler import handle_link_identity
 from src.handlers.headcount_handler import handle_team_summary, handle_headcount_summary
 from src.handlers.policy_handler import handle_policy
-from src.handlers import dispatcher
-from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +45,6 @@ _verifier = DiscordVerifier()
 _resolver = DiscordUserResolver()
 _ingress_adapter = DiscordIngressAdapter()
 _renderer = DiscordRenderer()
-
-
-def _serialize_user(user) -> Dict[str, Any]:
-    return {
-        "user_id": user.user_id,
-        "username": user.username,
-        "display_name": user.display_name,
-        "role": user.role.value,
-        "team": user.team,
-        "space_id": user.space_id,
-        "platform_roles": user.platform_roles,
-        "platform": user.platform,
-    }
 
 
 def create_error_response(message: str) -> Dict[str, Any]:
@@ -110,41 +95,6 @@ def _route_inprocess(normalized, interaction_type: int) -> Dict[str, Any]:
             "type": RESPONSE_CHANNEL_MESSAGE,
             "data": {"content": "🔧 Component interactions are being implemented.", "flags": 64},
         }
-
-
-# ── Multi-Lambda dispatch path ────────────────────────────────────────────────
-
-def _dispatch(normalized, interaction_type: int) -> Dict[str, Any]:
-    if interaction_type == INTERACTION_APPLICATION_COMMAND:
-        cmd = normalized.command_name or ""
-        fn = dispatcher.get_function_for_command(cmd)
-        if not fn:
-            logger.warning(f"No feature Lambda for command: {cmd}")
-            return _route_inprocess(normalized, interaction_type)
-        payload = {
-            "dispatch_type": "command",
-            "command_name": cmd,
-            "options": normalized.options,
-            "interaction": normalized.raw_body,
-            "user": _serialize_user(normalized.user),
-        }
-    else:  # MESSAGE_COMPONENT
-        aid = normalized.action_id or ""
-        fn = dispatcher.get_function_for_component(aid)
-        if not fn:
-            logger.warning(f"No feature Lambda for component: {aid}")
-            return _route_inprocess(normalized, interaction_type)
-        payload = {
-            "dispatch_type": "component",
-            "action_id": aid,
-            "interaction": normalized.raw_body,
-            "user": _serialize_user(normalized.user),
-        }
-
-    result = dispatcher.dispatch(fn, payload, async_mode=False)
-    if result is None:
-        return create_error_response("Feature Lambda returned no response.")
-    return result
 
 
 # ── Lambda entry point ────────────────────────────────────────────────────────
@@ -203,10 +153,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "body": json.dumps(create_error_response(error_msg)),
                 }
 
-        if settings.ENABLE_MULTI_LAMBDA:
-            response = _dispatch(normalized, interaction_type)
-        else:
-            response = _route_inprocess(normalized, interaction_type)
+        response = _route_inprocess(normalized, interaction_type)
 
         return {
             "statusCode": 200,

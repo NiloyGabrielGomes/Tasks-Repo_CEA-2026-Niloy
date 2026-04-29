@@ -37,13 +37,6 @@ class Settings(BaseModel):
     # Debug mode
     DEBUG: bool = False
 
-    # Multi-Lambda dispatch
-    ENABLE_MULTI_LAMBDA: bool = False
-    MEAL_FUNCTION_NAME: str = ""
-    LOCATION_FUNCTION_NAME: str = ""
-    OVERRIDE_FUNCTION_NAME: str = ""
-    HEADCOUNT_FUNCTION_NAME: str = ""
-
     # Google Chat integration (feature-flagged)
     ENABLE_GOOGLE_CHAT: bool = False
     GOOGLE_CHAT_AUDIENCE: str = ""   
@@ -71,11 +64,6 @@ def get_settings() -> Settings:
         FORWARD_PLANNING_DAYS=int(os.getenv("FORWARD_PLANNING_DAYS", "7")),
         TIMEZONE=os.getenv("TIMEZONE", "Asia/Dhaka"),
         DEBUG=os.getenv("DEBUG", "false").lower() == "true",
-        ENABLE_MULTI_LAMBDA=os.getenv("ENABLE_MULTI_LAMBDA", "false").lower() == "true",
-        MEAL_FUNCTION_NAME=os.getenv("MEAL_FUNCTION_NAME", ""),
-        LOCATION_FUNCTION_NAME=os.getenv("LOCATION_FUNCTION_NAME", ""),
-        OVERRIDE_FUNCTION_NAME=os.getenv("OVERRIDE_FUNCTION_NAME", ""),
-        HEADCOUNT_FUNCTION_NAME=os.getenv("HEADCOUNT_FUNCTION_NAME", ""),
         ENABLE_GOOGLE_CHAT=os.getenv("ENABLE_GOOGLE_CHAT", "false").lower() == "true",
         GOOGLE_CHAT_AUDIENCE=os.getenv("GOOGLE_CHAT_AUDIENCE", ""),
         GOOGLE_CHAT_ADMIN_EMAILS=os.getenv("GOOGLE_CHAT_ADMIN_EMAILS", ""),
