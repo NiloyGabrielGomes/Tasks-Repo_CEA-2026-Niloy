@@ -44,6 +44,11 @@ Parameters:
     Default: ""
     Description: JWT audience for Google Chat verification — set to your API Gateway endpoint URL (e.g. https://xxx.execute-api.ap-south-1.amazonaws.com/prod/google-chat)
 
+  GoogleChatJwtIssuer:
+    Type: String
+    Default: "https://accounts.google.com"
+    Description: JWT issuer for API Gateway native Google Chat JWT authorizer
+
   RoleAdminId:
     Type: String
     Default: ""
@@ -80,12 +85,6 @@ Globals:
         WFH_MONTHLY_CAP: "5"
         FORWARD_PLANNING_DAYS: "7"
         TIMEZONE: "Asia/Dhaka"
-        # Multi-Lambda dispatch (Issue #19) — set to "true" to enable
-        ENABLE_MULTI_LAMBDA: "true"
-        MEAL_FUNCTION_NAME: trainee-2026-niloy-mhp-meal
-        LOCATION_FUNCTION_NAME: trainee-2026-niloy-mhp-location
-        OVERRIDE_FUNCTION_NAME: trainee-2026-niloy-mhp-override
-        HEADCOUNT_FUNCTION_NAME: trainee-2026-niloy-mhp-headcount
         # Google Chat integration (Issue #18) — set ENABLE_GOOGLE_CHAT to "true" to enable
         ENABLE_GOOGLE_CHAT: !Ref EnableGoogleChat
         GOOGLE_CHAT_AUDIENCE: !Ref GoogleChatAudience
@@ -108,7 +107,7 @@ Resources:
 
   # ── IAM Roles ────────────────────────────────────────────────────────────────
 
-  # Ingress role: CloudWatch logs + Lambda invoke only (no DynamoDB)
+  # Ingress role: CloudWatch logs + DynamoDB writes for user upsert
   IngressExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -123,17 +122,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: trainee-2026-niloy-mhp-ingress-invoke-policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: lambda:InvokeFunction
-                Resource:
-                  - !GetAtt MealFunction.Arn
-                  - !GetAtt LocationFunction.Arn
-                  - !GetAtt OverrideFunction.Arn
-                  - !GetAtt HeadcountFunction.Arn
         - PolicyName: trainee-2026-niloy-mhp-ingress-dynamodb-policy
           PolicyDocument:
             Version: '2012-10-17'
@@ -145,50 +133,6 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource:
                   - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}
-
-  # Feature role: DynamoDB + S3 (used by meal, location, override Lambdas)
-  FeatureExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: trainee-2026-niloy-mhp-feature-role
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: trainee-2026-niloy-mhp-feature-dynamodb-policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                  - dynamodb:BatchWriteItem
-                Resource:
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}
-                  - !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTableName}/index/*
-        - PolicyName: trainee-2026-niloy-mhp-feature-s3-policy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !Sub arn:aws:s3:::${S3BucketName}
-                  - !Sub arn:aws:s3:::${S3BucketName}/*
 
   # Google Chat ingress role — DynamoDB + S3, no Lambda invoke needed (synchronous path)
   GoogleChatIngressExecutionRole:
@@ -250,8 +194,61 @@ Resources:
     Properties:
       Name: trainee-2026-niloy-mhp-api
       StageName: prod
+      Auth:
+        Authorizers:
+          DiscordLambdaAuthorizer:
+            FunctionArn: !GetAtt DiscordAuthorizerFunction.Arn
+            Identity:
+              Headers:
+                - x-signature-ed25519
+                - x-signature-timestamp
+                - content-type
+            AuthorizerPayloadFormatVersion: '2.0'
+            EnableSimpleResponses: true
+          GoogleChatJwtAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Ref GoogleChatJwtIssuer
+              audience:
+                - !Ref GoogleChatAudience
 
   # ── Lambda Functions ──────────────────────────────────────────────────────────
+
+  # Discord authorizer: early header/context filtering only.
+  # Full signature verification still happens in the ingress Lambda because
+  # API Gateway authorizers do not receive the raw request body.
+
+  DiscordAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: trainee-2026-niloy-mhp-discord-auth
+      Handler: src.handlers.discord_authorizer.lambda_handler
+      CodeUri: ../
+      Role: !GetAtt DiscordAuthorizerExecutionRole.Arn
+    Metadata:
+      BuildMethod: makefile
+
+  DiscordAuthorizerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: trainee-2026-niloy-mhp-discord-auth-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  DiscordAuthorizerInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DiscordAuthorizerFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${BotApi}/authorizers/*
 
   # Ingress: signature verification, auth, dispatch
   InteractionFunction:
@@ -272,47 +269,8 @@ Resources:
             Path: /discord
             Method: POST
             ApiId: !Ref BotApi
-    Metadata:
-      BuildMethod: makefile
-
-  # Feature Lambdas — invoked by IngressFunction; no direct API trigger
-  MealFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: trainee-2026-niloy-mhp-meal
-      Handler: src.handlers.meal_handler.lambda_handler
-      CodeUri: ../
-      Role: !GetAtt FeatureExecutionRole.Arn
-    Metadata:
-      BuildMethod: makefile
-
-  LocationFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: trainee-2026-niloy-mhp-location
-      Handler: src.handlers.location_handler.lambda_handler
-      CodeUri: ../
-      Role: !GetAtt FeatureExecutionRole.Arn
-    Metadata:
-      BuildMethod: makefile
-
-  OverrideFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: trainee-2026-niloy-mhp-override
-      Handler: src.handlers.override_handler.lambda_handler
-      CodeUri: ../
-      Role: !GetAtt FeatureExecutionRole.Arn
-    Metadata:
-      BuildMethod: makefile
-
-  HeadcountFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: trainee-2026-niloy-mhp-headcount
-      Handler: src.handlers.headcount_handler.lambda_handler
-      CodeUri: ../
-      Role: !GetAtt FeatureExecutionRole.Arn
+            Auth:
+              Authorizer: DiscordLambdaAuthorizer
     Metadata:
       BuildMethod: makefile
 
@@ -346,6 +304,8 @@ Resources:
             Path: /google-chat
             Method: POST
             ApiId: !Ref BotApi
+            Auth:
+              Authorizer: GoogleChatJwtAuthorizer
     Metadata:
       BuildMethod: makefile
 
@@ -369,8 +329,3 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-GoogleChatFunctionArn
 
-  HeadcountFunctionArn:
-    Description: Headcount summary Lambda ARN
-    Value: !GetAtt HeadcountFunction.Arn
-    Export:
-      Name: !Sub ${AWS::StackName}-HeadcountFunctionArn
