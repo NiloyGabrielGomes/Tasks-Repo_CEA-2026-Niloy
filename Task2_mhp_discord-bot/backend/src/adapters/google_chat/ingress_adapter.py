@@ -25,7 +25,12 @@ class GoogleChatIngressAdapter:
         if btn_payload:
             action = btn_payload.get("action") or {}
             params = {p["key"]: p["value"] for p in action.get("parameters", [])}
-            action_id = params.get("action_id", "")
+            # Dialog buttons use action.function; legacy buttons use action_id in parameters
+            action_id = params.get("action_id") or action.get("function", "")
+            # Parse dialog form values if present
+            form_values = _extract_dialog_form_values(btn_payload)
+            if form_values:
+                params.update(form_values)
             return NormalizedInteraction(
                 platform="google_chat",
                 interaction_type="action",
@@ -84,7 +89,10 @@ class GoogleChatIngressAdapter:
         if event_type == "CARD_CLICKED":
             action = body.get("action") or {}
             params = {p["key"]: p["value"] for p in action.get("parameters", [])}
-            action_id = params.get("action_id", "")
+            action_id = params.get("action_id") or action.get("function", "")
+            form_values = _extract_dialog_form_values(body)
+            if form_values:
+                params.update(form_values)
             return NormalizedInteraction(
                 platform="google_chat",
                 interaction_type="action",
@@ -137,3 +145,28 @@ def _enrich_with_mentions(options: Dict[str, Any], message: Dict[str, Any]) -> N
             if mention_display:
                 options["_mention_display_name"] = mention_display
         break  # only use the first user mention
+
+
+def _extract_dialog_form_values(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract form input values from a Google Chat dialog submit payload.
+
+    Google Chat dialog forms submit values under common.formInputs or
+    common.invokedFunction. Returns a flat dict of field_name -> value.
+    """
+    form_values: Dict[str, Any] = {}
+    common = payload.get("common") or {}
+    form_inputs = common.get("formInputs") or {}
+
+    for field_name, field_data in form_inputs.items():
+        # Each field_data is {"stringInputs": {"value": ["the_value"]}}
+        string_inputs = field_data.get("stringInputs") or {}
+        values = string_inputs.get("value") or []
+        if values:
+            form_values[field_name] = values[0]
+
+    # Also capture any invoked function from dialog actions
+    invoked_function = common.get("invokedFunction")
+    if invoked_function:
+        form_values["_invoked_function"] = invoked_function
+
+    return form_values

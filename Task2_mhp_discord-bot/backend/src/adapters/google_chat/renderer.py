@@ -2,7 +2,7 @@ from datetime import date
 from typing import Any, Dict, Optional
 
 from src.adapters.base import UIRenderer
-from src.models import MealType, WorkLocationType, MealParticipation
+from src.models import MealType, WorkLocationType, MealParticipation, UserRole
 from src.services.meal_service import MEAL_DISPLAY, DEFAULT_MEAL_TYPES
 from src.services.location_service import LOCATION_DISPLAY
 from src.utils import format_date_display
@@ -274,6 +274,99 @@ class GoogleChatRenderer(UIRenderer):
         except (KeyError, TypeError):
             return payload
 
+    # ── Dialogs ────────────────────────────────────────────────────────────────
+
+    def render_start_dialog(
+        self,
+        user_role: "UserRole",
+        team: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Return a synchronous OPEN_DIALOG response with a role-aware feature menu."""
+        widgets = []
+
+        # Common features (Employee+)
+        common_buttons = [
+            _dialog_menu_button("Meal Update", "start_menu:meal"),
+            _dialog_menu_button("Work Location", "start_menu:location"),
+            _dialog_menu_button("Link Identity", "start_menu:link"),
+        ]
+        widgets.append({"buttonList": {"buttons": common_buttons}})
+
+        # Team Lead features
+        if user_role in (UserRole.TEAM_LEAD, UserRole.ADMIN):
+            lead_buttons = [
+                _dialog_menu_button("Team Summary", "start_menu:team_summary"),
+                _dialog_menu_button("Override Update", "start_menu:override"),
+            ]
+            widgets.append({"textParagraph": {"text": "<b>Team Lead Options</b>"}})
+            widgets.append({"buttonList": {"buttons": lead_buttons}})
+
+        # Admin features
+        if user_role == UserRole.ADMIN:
+            admin_buttons = [
+                _dialog_menu_button("Headcount Summary", "start_menu:headcount"),
+                _dialog_menu_button("Policy Settings", "start_menu:policy"),
+            ]
+            widgets.append({"textParagraph": {"text": "<b>Admin Options</b>"}})
+            widgets.append({"buttonList": {"buttons": admin_buttons}})
+
+        if team:
+            widgets.insert(0, {"textParagraph": {"text": f"🏷️ Team: {team}"}})
+
+        return {
+            "actionResponse": {
+                "type": "OPEN_DIALOG",
+                "dialogAction": {
+                    "dialog": {
+                        "body": {
+                            "sections": [{
+                                "header": "What would you like to do?",
+                                "widgets": widgets,
+                            }]
+                        }
+                    }
+                }
+            }
+        }
+
+    def render_dialog_error(self, message: str) -> Dict[str, Any]:
+        """Return a dialog error that updates the current dialog with an error message."""
+        return {
+            "actionResponse": {
+                "type": "DIALOG",
+                "dialogAction": {
+                    "dialog": {
+                        "body": {
+                            "sections": [{
+                                "widgets": [{
+                                    "textParagraph": {"text": f"❌ {message}"}
+                                }]
+                            }]
+                        }
+                    }
+                }
+            }
+        }
+
+    def render_dialog_success(self, message: str) -> Dict[str, Any]:
+        """Return a dialog success that updates the current dialog with a confirmation."""
+        return {
+            "actionResponse": {
+                "type": "DIALOG",
+                "dialogAction": {
+                    "dialog": {
+                        "body": {
+                            "sections": [{
+                                "widgets": [{
+                                    "textParagraph": {"text": f"✅ {message}"}
+                                }]
+                            }]
+                        }
+                    }
+                }
+            }
+        }
+
 
 # ── Private helpers ───────────────────────────────────────────────────────────
 
@@ -349,3 +442,16 @@ def _build_summary_widgets(summary: Dict[str, Any]) -> list:
     })
 
     return widgets
+
+
+def _dialog_menu_button(text: str, action_function: str) -> Dict[str, Any]:
+    """Build a dialog menu button that triggers a CARD_CLICKED action."""
+    return {
+        "text": text,
+        "onClick": {
+            "action": {
+                "function": action_function,
+                "parameters": [],
+            }
+        }
+    }
