@@ -54,7 +54,8 @@ def authorize_command(
 COMMAND_ROLE_REQUIREMENTS = {
     "meal-update": UserRole.EMPLOYEE,
     "work-location": UserRole.EMPLOYEE,
-    "link-identity": UserRole.EMPLOYEE,   
+    "link-identity": UserRole.EMPLOYEE,
+    "start": UserRole.EMPLOYEE,
     "team-summary": UserRole.TEAM_LEAD,
     "headcount-summary": UserRole.ADMIN,
     "override-update": UserRole.TEAM_LEAD,

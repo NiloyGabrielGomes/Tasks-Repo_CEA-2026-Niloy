@@ -91,13 +91,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             # Button clicks: respond synchronously with UPDATE_MESSAGE
             update_response = _renderer.render_update(response)
             return update_response
-        else:
-            # Slash commands: post async via Chat REST API, return empty
-            # (sync responses don't work with API Gateway v2 + Google Chat)
-            space_name = _extract_space_name(body)
-            unwrapped = _unwrap_render_actions(response)
-            _post_to_chat(space_name, unwrapped)
-            return {}
+
+        # Dialog open/submit responses must be returned synchronously
+        if _is_dialog_response(response):
+            return response
+
+        # Legacy slash commands: post async via Chat REST API, return empty
+        space_name = _extract_space_name(body)
+        unwrapped = _unwrap_render_actions(response)
+        _post_to_chat(space_name, unwrapped)
+        return {}
 
     except Exception as e:
         logger.exception(f"Error handling Google Chat interaction: {e}")
@@ -106,6 +109,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 def _route_command(normalized) -> Dict[str, Any]:
     cmd = normalized.command_name or ""
+    if cmd == "start":
+        return _renderer.render_start_dialog(normalized.user.role, normalized.user.team)
     if cmd == "meal-update":
         return handle_meal_update(normalized, _renderer)
     if cmd == "work-location":
@@ -133,7 +138,19 @@ def _route_action(normalized) -> Dict[str, Any]:
         return handle_override_meal(normalized, _renderer)
     if aid.startswith(OVERRIDE_LOC_PREFIX):
         return handle_override_location(normalized, _renderer)
+    if aid.startswith("start_menu:"):
+        feature = aid.split(":", 1)[1] if ":" in aid else ""
+        return _renderer.render_dialog_success(f"{feature} — opening form...")
     return _renderer.render_error("Unknown action")
+
+
+def _is_dialog_response(response: Dict[str, Any]) -> bool:
+    """Check if a response payload is a dialog open/update that must be returned synchronously."""
+    try:
+        action_type = response.get("actionResponse", {}).get("type", "")
+        return action_type in ("OPEN_DIALOG", "DIALOG")
+    except (AttributeError, TypeError):
+        return False
 
 
 def _unwrap_render_actions(response: Dict[str, Any]) -> Dict[str, Any]:
