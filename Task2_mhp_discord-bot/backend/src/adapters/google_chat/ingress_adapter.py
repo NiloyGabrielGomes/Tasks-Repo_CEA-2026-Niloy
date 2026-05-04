@@ -26,7 +26,11 @@ class GoogleChatIngressAdapter:
             action = btn_payload.get("action") or {}
             params = {p["key"]: p["value"] for p in action.get("parameters", [])}
             # Dialog buttons use action.function; legacy buttons use action_id in parameters
-            action_id = params.get("action_id") or action.get("function", "")
+            action_id = (
+                params.get("action_id")
+                or action.get("function", "")
+                or action.get("actionMethodName", "")
+            )
             # Parse dialog form values if present
             form_values = _extract_dialog_form_values(btn_payload)
             if form_values:
@@ -89,7 +93,11 @@ class GoogleChatIngressAdapter:
         if event_type == "CARD_CLICKED":
             action = body.get("action") or {}
             params = {p["key"]: p["value"] for p in action.get("parameters", [])}
-            action_id = params.get("action_id") or action.get("function", "")
+            action_id = (
+                params.get("action_id")
+                or action.get("function", "")
+                or action.get("actionMethodName", "")
+            )
             form_values = _extract_dialog_form_values(body)
             if form_values:
                 params.update(form_values)

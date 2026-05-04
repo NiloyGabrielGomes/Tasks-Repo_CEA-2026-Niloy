@@ -35,6 +35,7 @@ from src.handlers.policy_handler import handle_policy
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+logging.getLogger().setLevel(logging.INFO)
 
 # Module-level singletons (reused across warm invocations)
 _verifier = GoogleChatVerifier()
@@ -46,22 +47,40 @@ _CHAT_SCOPES = ["https://www.googleapis.com/auth/chat.bot"]
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    logger.info("Google Chat interaction received")
+    # CRITICAL level guarantees visibility regardless of env log level configuration
+    logger.critical("Google Chat interaction received")
 
     if not settings.ENABLE_GOOGLE_CHAT:
+        logger.critical("ENABLE_GOOGLE_CHAT is false")
         return {"text": "Google Chat integration not enabled"}
 
     try:
+        # Log sanitized event structure for debugging
+        event_keys = list(event.keys())
+        headers = event.get("headers") or {}
+        auth_present = bool(headers.get("Authorization") or headers.get("authorization"))
+        logger.critical("Event keys: %s, auth_present: %s", event_keys, auth_present)
+
         verified = _verifier.verify(event)
+        logger.critical("JWT verification result: %s", verified)
         if not verified:
             return {"text": "Unauthorized"}
 
         body = _verifier.extract_body(event)
         if not body:
+            logger.critical("Failed to extract body from event")
             return {"text": "Failed to parse request body"}
 
+        body_keys = list(body.keys())
+        logger.critical("Body top-level keys: %s", body_keys)
+        chat_obj = body.get("chat") or {}
+        logger.critical("Chat object keys: %s", list(chat_obj.keys()))
+        app_cmd = chat_obj.get("appCommandPayload") or {}
+        logger.critical("appCommandPayload keys: %s", list(app_cmd.keys()))
+
         user = _resolver.resolve(body)
-        logger.info(f"Google Chat user: {user.username} ({user.user_id}), role: {user.role.value}")
+        logger.critical("User: %s (%s), role: %s, team: %s",
+                        user.username, user.user_id, user.role.value, user.team)
         _db.upsert_user(User(
             user_id=user.user_id,
             name=user.display_name or user.username,
@@ -71,7 +90,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         normalized = _adapter.normalize(body, user)
         if not normalized:
+            logger.critical("Adapter returned None for body keys: %s", body_keys)
             return {"text": "Unsupported event type"}
+
+        logger.critical("Normalized: type=%s cmd=%s action=%s options=%s",
+                        normalized.interaction_type,
+                        normalized.command_name,
+                        normalized.action_id,
+                        list(normalized.options.keys()))
 
         # Authorization check for commands
         if normalized.interaction_type == "command" and normalized.command_name:
@@ -87,6 +113,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         else:
             response = _route_action(normalized)
 
+        logger.critical("Response type: %s", _classify_response(response))
+
         if normalized.interaction_type == "action":
             # Button clicks: respond synchronously with UPDATE_MESSAGE
             update_response = _renderer.render_update(response)
@@ -94,7 +122,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Dialog open/submit responses must be returned synchronously
         if _is_dialog_response(response):
-            return response
+            payload_json = json.dumps(response, default=str)
+            logger.critical("Returning synchronous dialog response: %s", payload_json)
+            # API Gateway v2 requires proxy response format
+            return {
+                "statusCode": 200,
+                "headers": {"Content-Type": "application/json"},
+                "body": payload_json,
+            }
 
         # Legacy slash commands: post async via Chat REST API, return empty
         space_name = _extract_space_name(body)
@@ -103,7 +138,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return {}
 
     except Exception as e:
-        logger.exception(f"Error handling Google Chat interaction: {e}")
+        logger.critical("EXCEPTION: %s", e, exc_info=True)
         return {"text": "❌ An error occurred processing your request"}
 
 
@@ -138,8 +173,8 @@ def _route_action(normalized) -> Dict[str, Any]:
         return handle_override_meal(normalized, _renderer)
     if aid.startswith(OVERRIDE_LOC_PREFIX):
         return handle_override_location(normalized, _renderer)
-    if aid.startswith("start_menu:"):
-        feature = aid.split(":", 1)[1] if ":" in aid else ""
+    if aid.startswith("start_menu_"):
+        feature = aid[len("start_menu_"):]
         return _renderer.render_dialog_success(f"{feature} — opening form...")
     return _renderer.render_error("Unknown action")
 
@@ -211,6 +246,20 @@ def _get_chat_access_token() -> Optional[str]:
     except Exception as e:
         logger.error("Failed to get Chat API access token: %s", e)
         return None
+
+
+def _classify_response(response: Dict[str, Any]) -> str:
+    """Return a human-readable classification of a response payload for logging."""
+    if not isinstance(response, dict):
+        return f"non-dict ({type(response).__name__})"
+    ar = response.get("actionResponse")
+    if isinstance(ar, dict):
+        return f"actionResponse:{ar.get('type', 'unknown')}"
+    if "renderActions" in response:
+        return "renderActions"
+    if "text" in response:
+        return "text"
+    return f"keys={list(response.keys())}"
 
 
 def _post_to_chat(space_name: Optional[str], message: Dict[str, Any]) -> None:

@@ -286,32 +286,32 @@ class GoogleChatRenderer(UIRenderer):
 
         # Common features (Employee+)
         common_buttons = [
-            _dialog_menu_button("Meal Update", "start_menu:meal"),
-            _dialog_menu_button("Work Location", "start_menu:location"),
-            _dialog_menu_button("Link Identity", "start_menu:link"),
+            _dialog_menu_button("Meal Update", "start_menu_meal"),
+            _dialog_menu_button("Work Location", "start_menu_location"),
+            _dialog_menu_button("Link Identity", "start_menu_link"),
         ]
-        widgets.append({"buttonList": {"buttons": common_buttons}})
+        widgets.append({"buttons": common_buttons})
 
         # Team Lead features
         if user_role in (UserRole.TEAM_LEAD, UserRole.ADMIN):
             lead_buttons = [
-                _dialog_menu_button("Team Summary", "start_menu:team_summary"),
-                _dialog_menu_button("Override Update", "start_menu:override"),
+                _dialog_menu_button("Team Summary", "start_menu_team_summary"),
+                _dialog_menu_button("Override Update", "start_menu_override"),
             ]
             widgets.append({"textParagraph": {"text": "<b>Team Lead Options</b>"}})
-            widgets.append({"buttonList": {"buttons": lead_buttons}})
+            widgets.append({"buttons": lead_buttons})
 
         # Admin features
         if user_role == UserRole.ADMIN:
             admin_buttons = [
-                _dialog_menu_button("Headcount Summary", "start_menu:headcount"),
-                _dialog_menu_button("Policy Settings", "start_menu:policy"),
+                _dialog_menu_button("Headcount Summary", "start_menu_headcount"),
+                _dialog_menu_button("Policy Settings", "start_menu_policy"),
             ]
             widgets.append({"textParagraph": {"text": "<b>Admin Options</b>"}})
-            widgets.append({"buttonList": {"buttons": admin_buttons}})
+            widgets.append({"buttons": admin_buttons})
 
         if team:
-            widgets.insert(0, {"textParagraph": {"text": f"🏷️ Team: {team}"}})
+            widgets.insert(0, {"textParagraph": {"text": f"Team: {team}"}})
 
         return {
             "actionResponse": {
@@ -445,13 +445,14 @@ def _build_summary_widgets(summary: Dict[str, Any]) -> list:
 
 
 def _dialog_menu_button(text: str, action_function: str) -> Dict[str, Any]:
-    """Build a dialog menu button that triggers a CARD_CLICKED action."""
+    """Build a Cards v1 dialog menu button that triggers a CARD_CLICKED action."""
     return {
-        "text": text,
-        "onClick": {
-            "action": {
-                "function": action_function,
-                "parameters": [],
+        "textButton": {
+            "text": text,
+            "onClick": {
+                "action": {
+                    "actionMethodName": action_function,
+                }
             }
         }
     }
